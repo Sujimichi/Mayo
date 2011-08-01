@@ -26,7 +26,5 @@ PLATFORMS
 
 DEPENDENCIES
   ZenTest
-  dalli
-  json
   mayo!
   rspec

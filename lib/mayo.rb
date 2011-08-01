@@ -25,14 +25,16 @@ class Mayo::Server
     value = @cache.get('abc')
     puts value.inspect
     wait_for_clients
-    @cache.set("active_mayo_server", self)
+    puts "next"
+    #@cache.set("active_mayo_server", self)
+    current_clients
   end
 
   def wait_for_clients
     server = TCPServer.open(2000)   
     @cache.set('count', 0)    
     
-    loop {
+    2.times {
       print "."
       Thread.start(server.accept) do |client|
         puts "Signing up new client:"
@@ -53,6 +55,25 @@ class Mayo::Server
   def send_files_to_client client_data
     command = "rsync -avc -e ssh --delete --ignore-errors #{@project_dir} #{client_data["username"]}@#{client_data["hostname"]}:#{client_data["working_dir"]}"
     `#{command}`
+  end
+
+  def current_clients
+    puts "looking for clients in cache"
+    @current_clients = []
+    i = 0
+    stop = false
+    until stop
+      client_data = @cache.get("client_#{i}")
+      stop = client_data.nil?
+      puts "putsing"
+      puts i
+      puts client_data.inspect
+      @current_clients << client_data
+      i += 1
+      raise "wft" if i >= 50
+    end
+
+    puts @current_clients.inspect
   end
 
 end

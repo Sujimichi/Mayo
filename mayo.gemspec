@@ -9,20 +9,20 @@ Gem::Specification.new do |s|
   s.authors     = ["Sujimichi"]
   s.email       = ["sujimichi@gmail.com"]
   s.homepage    = ""
-  s.summary     = %q{A noobish simplistic attempt at distributing cucumber features}
-  s.description = s.summary
+  s.summary     = %q{a noobish simplistic attempt at distributing cucumber features}
+  s.description = %q{a noobish simplistic attempt at distributing cucumber features}
 
-  s.rubyforge_project = "mao"
+  s.rubyforge_project = "mayo"
 
   s.add_development_dependency('rspec')
   s.add_development_dependency('ZenTest')
   s.add_dependency('dalli')
   s.add_dependency('json')
 
-
   s.files         = `git ls-files`.split("\n")
   s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   s.require_paths = ["lib"]
+  s.bindir = 'bin'
 
 end
