@@ -31,7 +31,7 @@ class Mayo::Server
 
   def initialize
     puts "Initializing Mayo Server - The Rich Creamy Goodness of your tests will soon be spread."
-    @port = [:client_connect => 2000, :client_response => 2001]
+    @port = {:client_connect => 2000, :client_response => 2001}
     @cache = Dalli::Client.new('localhost:11211')   
     @project_dir = Dir.getwd   
     @clients = []
@@ -109,21 +109,17 @@ class Mayo::Server
     
   end
 
-
-
-
   def update_active_clients
+    clients = current_clients
     print "\nUpdating Active Clients' Data"
-    c = 0
-    active_clients do |client|
+    active_clients(clients) do |client|
       print(".")
       client["socket"].puts({:display => "receiving files"}.to_json)
       send_files_to_client client
       client["socket"].puts("goto_project_dir")
       client["socket"].puts({:run => "bundle install"}.to_json)
-      c += 1
     end
-    puts "updated #{c} clients"
+    puts "\tUpdated #{clients.size} clients"
   end
 
   def stop
@@ -140,8 +136,8 @@ class Mayo::Server
     `#{command}`
   end
 
-  def active_clients &blk
-    current_clients.each_with_index do |client, index|
+  def active_clients clients = current_clients, &blk
+    clients.each_with_index do |client, index|
       yield(client, index)      
     end
   end
@@ -186,10 +182,8 @@ class Mayo::Client
     @socket = TCPSocket.open(@server, @server_port)
     @socket.puts(@client_data.to_json)
     @server_inf = JSON.parse(@socket.gets)
-    #@socket.close
     @project_name = @server_inf["project_dir"].split("/").last
     @project_dir = Dir.getwd + "/" + @project_name
-
     puts "Registered with Mayo Server #{@server_inf["servername"]} for project #{@project_name}"
     
     order = true
@@ -212,11 +206,6 @@ class Mayo::Client
       @socket.close
     when "respond"
       @socket.puts("alive")
-    when "party"
-      puts "WOOOOOOO"
-    when "do_action"
-      command = "gedit"
-      system command
     when "goto_project_dir"
       Dir.chdir(@project_dir)
       puts "now in #{Dir.getwd}"
@@ -226,7 +215,6 @@ class Mayo::Client
       rescue
         puts "WHAT? Server is talking rubbish - \"#{order}\""
       end
-
       action = order.keys[0]
       if action.eql?("display")
         puts order[action]
@@ -235,15 +223,10 @@ class Mayo::Client
         puts result
       elsif action.eql?("run_and_return")
         result = `#{order[action]}`
-        begin
-        socket = TCPSocket.open(@server, 2001)
-        rescue
-          socket = @socket
-        end
+        socket = TCPSocket.open(@server, @server_port + 1)
         socket.puts(result)
-        socket.close unless socket == @socket
+        socket.close
       end
-      
     end
   end
 
