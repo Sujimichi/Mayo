@@ -214,19 +214,21 @@ class Mayo::Client
     else
       begin
         order = JSON.parse(order)
-        if order.keys[0].eql?("display")
-          puts order[order.keys[0]]
-        elsif order.keys[0].eql?("run")
-          result = `#{order[order.keys[0]]}`
-          puts result
-          #@socket.puts(result)
-          socket = TCPSocket.open(@server, @server_port + 1)
-          socket.puts(result)
-          socket.close
-        end
       rescue
         puts "WHAT? Server is talking rubbish - \"#{order}\""
       end
+
+      if order.keys[0].eql?("display")
+        puts order[order.keys[0]]
+      elsif order.keys[0].eql?("run")
+        result = `#{order[order.keys[0]]}`
+        puts result
+        #@socket.puts(result)
+        socket = TCPSocket.open(@server, 2001)
+        socket.puts(result)
+        socket.close
+      end
+      
     end
   end
 
