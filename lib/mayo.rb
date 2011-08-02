@@ -31,16 +31,20 @@ class Mayo::Server
 
   def initialize
     puts "Initializing Mayo Server - The Rich Creamy Goodness of your tests will soon be spread."
+    @port = [:client_connect => 2000, :client_response => 2001]
     @cache = Dalli::Client.new('localhost:11211')   
     @project_dir = Dir.getwd   
     @clients = []
-    @threads = [ Thread.new { wait_for_clients } ]  #Create a background thread which accepts connections from new clients
+    @threads = [ 
+      Thread.new { listen_for_clients }, #Create a thread which accepts connections from new clients
+      Thread.new { listen_for_response } #Create a thread which takes and displays info from clients
+    ]
     listen_for_intructions #listen for instrunctions sent via memcached 
   end
 
-  def wait_for_clients
-    server = TCPServer.open(2000)
-    puts "Ready to accept clients"
+  def listen_for_clients
+    server = TCPServer.open(@port[:client_connect])
+    puts "Port #{@port[:client_connect]} open to accept new clients"
     loop {
       client = server.accept
       #TODO send the client the servers public key to be added to the clients authorized_keys
@@ -49,6 +53,16 @@ class Mayo::Server
       client_data = JSON.parse(client_data).merge!("socket" => client)
       @clients << client_data
       puts "Signing up client: #{client_data['name']}"       
+    }
+  end
+
+  def listen_for_response
+    server = TCPServer.open(2001)
+    loop {
+      client = server.accept
+      while data = client.gets
+        puts data
+      end
     }
   end
 
@@ -79,28 +93,23 @@ class Mayo::Server
 
     active_clients do |client, index|
       command = "bundle exec rspec #{specs[index]}"
-      client["socket"].puts({:run => command}.to_json)
+      client["socket"].puts({:run_and_return => command}.to_json)
     end
   end
 
   def run_features
     update_active_clients
     specs = Dir['features/**/*.feature']
+    specs = ["features/01_user_settings/user_edit.feature", "features/01_registration_and_login/login.feature"]
 
     active_clients do |client, index|
       command = "bundle exec cucumber features/support/ features/step_definitions/ #{specs[index]}"
-      client["socket"].puts({:run => command}.to_json)
+      client["socket"].puts({:run_and_return => command}.to_json)
     end
+    
   end
 
-  def listen_for_response
-    server = TCPServer.open(2001)
-    loop {
-      client = server.accept
-      client_data = client.gets # Read info 
-      puts client_data.inspect
-    }
-  end
+
 
 
   def update_active_clients
@@ -218,15 +227,21 @@ class Mayo::Client
         puts "WHAT? Server is talking rubbish - \"#{order}\""
       end
 
-      if order.keys[0].eql?("display")
-        puts order[order.keys[0]]
-      elsif order.keys[0].eql?("run")
-        result = `#{order[order.keys[0]]}`
+      action = order.keys[0]
+      if action.eql?("display")
+        puts order[action]
+      elsif action.eql?("run")
+        result = `#{order[action]}`
         puts result
-        #@socket.puts(result)
+      elsif action.eql?("run_and_return")
+        result = `#{order[action]}`
+        begin
         socket = TCPSocket.open(@server, 2001)
+        rescue
+          socket = @socket
+        end
         socket.puts(result)
-        socket.close
+        socket.close unless socket == @socket
       end
       
     end
