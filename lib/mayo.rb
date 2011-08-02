@@ -15,6 +15,8 @@ class Mayo::Server
 
   def self.start   
     server = Mayo::Server.new
+    server.open_ports
+    server.listen_for_intructions #listen for instrunctions sent via memcached 
   end
 
   def self.run
@@ -35,11 +37,13 @@ class Mayo::Server
     @cache = Dalli::Client.new('localhost:11211')   
     @project_dir = Dir.getwd   
     @clients = []
+  end
+
+  def open_ports
     @threads = [ 
       Thread.new { listen_for_clients }, #Create a thread which accepts connections from new clients
       Thread.new { listen_for_response } #Create a thread which takes and displays info from clients
     ]
-    listen_for_intructions #listen for instrunctions sent via memcached 
   end
 
   def listen_for_clients
@@ -99,14 +103,37 @@ class Mayo::Server
 
   def run_features
     update_active_clients
-    specs = Dir['features/**/*.feature']
-    specs = ["features/01_user_settings/user_edit.feature", "features/01_registration_and_login/login.feature"]
 
+    #specs = Dir['features/**/*.feature']
+    specs = [
+      "features/01_user_settings/user_edit.feature", 
+      "features/01_registration_and_login/login.feature", 
+      "features/01_site_access/navigation.feature",
+      "features/01_site_access/restricted_access.feature",
+      "features/02_dashboard_models/delete_jvr_model.feature", 
+      "features/02_dashboard_models/create_jvr_model.feature", 
+      "features/02_dashboard_models/view_jvr_model.feature"
+    ]
+
+    jobs = divide_tasks specs
     active_clients do |client, index|
-      command = "bundle exec cucumber features/support/ features/step_definitions/ #{specs[index]}"
+      specs = jobs[index].join(" ")
+      command = "bundle exec cucumber features/support/ features/step_definitions/ #{specs}"
       client["socket"].puts({:run_and_return => command}.to_json)
     end
     
+  end
+
+  def divide_tasks tasks
+    tasks = tasks.sort{rand} 
+    groups = Array.new(current_clients.size){[]}
+    i = 0
+    until tasks.empty?
+      groups[i].push(tasks.pop)
+      i+=1
+      i = 0 if i > (groups.size - 1)
+    end
+    groups
   end
 
   def update_active_clients
