@@ -29,7 +29,7 @@ class Mayo::Server
     @cache.set("mayo_instruction", "stop")
   end
 
-  attr_accessor :clients
+  attr_accessor :clients, :listen
 
   def initialize
     puts "Initializing Mayo Server - The Rich Creamy Goodness of your tests will soon be spread."
@@ -40,6 +40,7 @@ class Mayo::Server
   end
 
   def open_ports
+    @listen = true
     @threads = [ 
       Thread.new { listen_for_clients }, #Create a thread which accepts connections from new clients
       Thread.new { listen_for_response } #Create a thread which takes and displays info from clients
@@ -49,7 +50,8 @@ class Mayo::Server
   def listen_for_clients
     server = TCPServer.open(@port[:client_connect])
     puts "Port #{@port[:client_connect]} open to accept new clients"
-    loop {
+
+    while @listen do
       client = server.accept
       #TODO send the client the servers public key to be added to the clients authorized_keys
       client.puts({:project_dir => @project_dir, :servername => Socket.gethostname}.to_json) #Send data to client       
@@ -57,17 +59,17 @@ class Mayo::Server
       client_data = JSON.parse(client_data).merge!("socket" => client)
       @clients << client_data
       puts "Signing up client: #{client_data['name']}"       
-    }
+    end
   end
 
   def listen_for_response
     server = TCPServer.open(2001)
-    loop {
+    while @listen do
       client = server.accept
       while data = client.gets
         puts data
       end
-    }
+    end
   end
 
   def listen_for_intructions
@@ -83,45 +85,41 @@ class Mayo::Server
     puts "got order: #{order}"
     case order
     when "run"
-      run_features
+      run_tests
     when "stop"
       return self.stop
     end
     listen_for_intructions
   end
 
-  def run_specs
+  def run_tests
     update_active_clients
-    specs = Dir['spec/**/*spec.rb']
-    specs = ["spec/lib/vr_xml_acceptance_spec.rb", "spec/models/entity_spec.rb"]
+    tasks = {
+      :features => {:files => Dir['features/**/*.feature'], :command_prefix => "bundle exec cucumber -p all features/support/ features/step_definitions/"},
+      :specs => {:files => Dir['spec/**/*spec.rb'], :command_prefix => "bundle exec rspec"}
+    }
+    task = tasks[:features]
 
+    task[:files] = detailed_cuke_files Dir['features/01*/*.feature']
+
+    jobs = divide_tasks task[:files]
     active_clients do |client, index|
-      command = "bundle exec rspec #{specs[index]}"
-      client["socket"].puts({:run_and_return => command}.to_json)
-    end
-  end
-
-  def run_features
-    update_active_clients
-
-    #specs = Dir['features/**/*.feature']
-    specs = [
-      "features/01_user_settings/user_edit.feature", 
-      "features/01_registration_and_login/login.feature", 
-      "features/01_site_access/navigation.feature",
-      "features/01_site_access/restricted_access.feature",
-      "features/02_dashboard_models/delete_jvr_model.feature", 
-      "features/02_dashboard_models/create_jvr_model.feature", 
-      "features/02_dashboard_models/view_jvr_model.feature"
-    ]
-
-    jobs = divide_tasks specs
-    active_clients do |client, index|
-      specs = jobs[index].join(" ")
-      command = "bundle exec cucumber features/support/ features/step_definitions/ #{specs}"
+      command = "#{task[:command_prefix]} #{jobs[index].join(" ")}"
       client["socket"].puts({:run_and_return => command}.to_json)
     end
     
+  end
+
+  def detailed_cuke_files files = Dir['features/**/*.feature']
+    scenarios = files.map do |path|
+      lines = File.open(path, 'r'){|f| f.readlines}
+      selected = []
+      lines.each_with_index do |line, index|
+        selected << "#{path}:#{index+1}" if line.match(/Scenario/)
+      end
+      selected
+    end
+    scenarios.flatten
   end
 
   def divide_tasks tasks
@@ -187,22 +185,17 @@ class Mayo::Client
   require 'json'
 
   def self.start
-    c = Mayo::Client.new
-  end
+    Dir.mkdir("mayo_testing") unless Dir.entries("./").include?("mayo_testing")
+    Dir.chdir("mayo_testing")   
+    client = Mayo::Client.new
+    client.register_with_server
+  end    
 
   def initialize
     @server = 'yokai'
     @server_port = 2000
-
-    begin
-      Dir.mkdir("tmp_testing")
-    rescue
-    end
-    Dir.chdir("tmp_testing")
     username = Dir.getwd.split("/")[2]
     @client_data = {:username => username, :name => client_name, :working_dir => Dir.getwd}
-    register_with_server  
-    puts @project_dir.inspect
   end
 
   def register_with_server
@@ -246,15 +239,20 @@ class Mayo::Client
       if action.eql?("display")
         puts order[action]
       elsif action.eql?("run")
-        result = `#{order[action]}`
-        puts result
+        puts run_command(order[action])
       elsif action.eql?("run_and_return")
-        result = `#{order[action]}`
+        result = run_command(order[action])
         socket = TCPSocket.open(@server, @server_port + 1)
         socket.puts(result)
         socket.close
       end
     end
+  end
+
+  def run_command command
+    result = `#{command}`
+    puts "command complete"
+    result
   end
 
   def client_name
