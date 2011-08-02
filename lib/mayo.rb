@@ -69,6 +69,12 @@ class Mayo::Server
       while data = client.gets
         puts data
       end
+      @jobs_left -= 1
+      if @jobs_left == 0
+        t = Time.now
+        puts "WOOOO jobs done"
+        puts (t - @jobs_started_at)
+      end
     end
   end
 
@@ -95,14 +101,14 @@ class Mayo::Server
   def run_tests
     update_active_clients
     tasks = {
-      :features => {:files => Dir['features/**/*.feature'], :command_prefix => "bundle exec cucumber -p all features/support/ features/step_definitions/"},
+      :features => {:files => detailed_cuke_files(Dir['features/03*/*.feature']), :command_prefix => "bundle exec cucumber -p all features/support/ features/step_definitions/"},
       :specs => {:files => Dir['spec/**/*spec.rb'], :command_prefix => "bundle exec rspec"}
     }
     task = tasks[:features]
 
-    task[:files] = detailed_cuke_files Dir['features/01*/*.feature']
-
     jobs = divide_tasks task[:files]
+    @jobs_left = jobs.size
+    @jobs_started_at = Time.now
     active_clients do |client, index|
       command = "#{task[:command_prefix]} #{jobs[index].join(" ")}"
       client["socket"].puts({:run_and_return => command}.to_json)
@@ -123,11 +129,11 @@ class Mayo::Server
   end
 
   def divide_tasks tasks
-    tasks = tasks.sort{rand} 
+    rand_tasks = tasks.sort_by{rand} 
     groups = Array.new(current_clients.size){[]}
     i = 0
-    until tasks.empty?
-      groups[i].push(tasks.pop)
+    until rand_tasks.empty?
+      groups[i].push(rand_tasks.pop)
       i+=1
       i = 0 if i > (groups.size - 1)
     end
