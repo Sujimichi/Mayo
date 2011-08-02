@@ -91,7 +91,15 @@ class Mayo::Server
       command = "bundle exec cucumber features/support/ features/step_definitions/ #{specs[index]}"
       client["socket"].puts({:run => command}.to_json)
     end
+  end
 
+  def listen_for_response
+    server = TCPServer.open(2001)
+    loop {
+      client = server.accept
+      client_data = client.gets # Read info 
+      puts client_data.inspect
+    }
   end
 
 
@@ -103,6 +111,7 @@ class Mayo::Server
       client["socket"].puts({:display => "receiving files"}.to_json)
       send_files_to_client client
       client["socket"].puts("goto_project_dir")
+      client["socket"].puts({:run => "bundle install"}.to_json)
       c += 1
     end
     puts "updated #{c} clients"
@@ -210,7 +219,10 @@ class Mayo::Client
         elsif order.keys[0].eql?("run")
           result = `#{order[order.keys[0]]}`
           puts result
-          @socket.puts(result)
+          #@socket.puts(result)
+          socket = TCPSocket.open(@server, @server_port + 1)
+          socket.puts(result)
+          socket.close
         end
       rescue
         puts "WHAT? Server is talking rubbish - \"#{order}\""
