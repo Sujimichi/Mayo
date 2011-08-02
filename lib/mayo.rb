@@ -149,7 +149,7 @@ class Mayo::Client
   end
 
   def initialize
-    @server = 'localhost'
+    @server = 'yokai'
     @server_port = 2000
 
     begin
