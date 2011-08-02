@@ -43,6 +43,7 @@ class Mayo::Server
     puts "Ready to accept clients"
     loop {
       client = server.accept
+      #TODO send the client the servers public key to be added to the clients authorized_keys
       client.puts({:project_dir => @project_dir, :servername => Socket.gethostname}.to_json) #Send data to client       
       client_data = client.gets # Read info from client       
       client_data = JSON.parse(client_data).merge!("socket" => client)
@@ -157,8 +158,8 @@ class Mayo::Client
     rescue
     end
     Dir.chdir("tmp_testing")
-
-    @client_data = {:username => "sujimichi", :name => client_name, :working_dir => Dir.getwd}
+    username = Dir.getwd.split("/")[2]
+    @client_data = {:username => username, :name => client_name, :working_dir => Dir.getwd}
     register_with_server  
     puts @project_dir.inspect
   end
