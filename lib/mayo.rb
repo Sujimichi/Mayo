@@ -1,42 +1,42 @@
 module Mayo
   def self.command args
     Mayo::Server.start if args.include?("server")
-    Mayo::Server.run(args)   if args.include?("run")
-    Mayo::Server.stop   if args.include?("stop")
-    
+    Mayo::Server.run(args) if args.include?("run")
+    Mayo::Server.stop   if args.include?("stop")   
     Mayo::Client.start if args.include?("connect")
   end
 end
 
 class Mayo::Server
   require 'socket'
-  require 'dalli'
   require 'json'
 
   def self.start   
     server = Mayo::Server.new
     server.open_ports
-    server.listen_for_intructions #listen for instrunctions sent via memcached 
+    server.listen_for_instructions #listen for instrunctions sent via memcached 
   end
 
   def self.run args = nil
-    @cache = Dalli::Client.new('localhost:11211')   
-    @cache.set("mayo_instruction", "run")
+    socket = TCPSocket.open(Socket.gethostname, 2002)
+    socket.puts(args)
+    socket.close
   end
 
   def self.stop
-    @cache = Dalli::Client.new('localhost:11211')   
-    @cache.set("mayo_instruction", "stop")
+    socket = TCPSocket.open(Socket.gethostname, 2002)
+    socket.puts("stop")
+    socket.close    
   end
 
   attr_accessor :clients, :listen
 
   def initialize
     puts "Initializing Mayo Server - The Rich Creamy Goodness of your tests will soon be spread."
-    @port = {:client_connect => 2000, :client_response => 2001}
-    @cache = Dalli::Client.new('localhost:11211')   
+    @port = {:client_connect => 2000, :client_response => 2001, :server_instruct => 2002} 
     @project_dir = Dir.getwd   
     @clients = []
+    @threads = []
   end
 
   def open_ports
@@ -63,7 +63,7 @@ class Mayo::Server
   end
 
   def listen_for_response
-    server = TCPServer.open(2001)
+    server = TCPServer.open(@port[:client_response])
     while @listen do
       client = server.accept
       while data = client.gets
@@ -79,41 +79,54 @@ class Mayo::Server
   end
 
   def listen_for_instructions
-    @cache.set("mayo_instruction", nil) #make sure no old instruction
-    puts "waiting for orders"     
-    while @cache.get("mayo_instruction").nil?
+    puts "Port #{@port[:server_instruct]} open for instructions"
+    server = TCPServer.open(@port[:server_instruct])
+    while @listen
+      c = server.accept
+      orders = []
+      while order = c.gets
+        orders << order.chop
+      end
+      self.perform(orders) 
     end
-    self.perform(@cache.get("mayo_instruction"))
-    @cache.set("mayo_instruction", nil)     #reset cache
   end
 
   def perform instruction
     puts "got order: #{instruction}"
-    case instruction
-    when "run"
-      run_tests
-    when "stop"
-      return self.stop
+    return self.stop if instruction.eql?("stop")
+    return self.run_tests if instruction.eql?("run")
+
+    if instruction.is_a?(Array)
+      if instruction[0].eql?("run")
+        self.run_tests instruction[1..instruction.size]
+      end
     end
-    listen_for_instructions
+
   end
 
-  def run_tests
+  def run_tests *args
+    args.flatten!
+    return puts("No Clients") if current_clients.empty?
     update_active_clients
-    tasks = {
-      :features => {:files => detailed_cuke_files(Dir['features/**/*.feature']), :command_prefix => "bundle exec cucumber -p all features/support/ features/step_definitions/"},
-      :specs => {:files => Dir['spec/**/*spec.rb'], :command_prefix => "bundle exec rspec"}
-    }
-    task = tasks[:features]
 
-    jobs = divide_tasks task[:files]
+    files_for = {"features" => "features/**/*.feature", "specs" => "spec/**/*spec.rb"}
+    prefi = {"features" => "bundle exec cucumber -p all features/support/ features/step_definitions/", "specs" => "bundle exec rspec"}
+    type = args[0] || "features"
+    files = get_files_from(args[1]) if args[1]
+    files ||= get_files_from(files_for[type])
+    prefix = prefi[type]
+
+    jobs = divide_tasks files
     @jobs_left = jobs.size
     @jobs_started_at = Time.now
     active_clients do |client, index|
-      command = "#{task[:command_prefix]} #{jobs[index].join(" ")}"
+      command = "#{prefix} #{jobs[index].join(" ")}"
       client["socket"].puts({:run_and_return => command}.to_json)
-    end
-    
+    end    
+  end
+
+  def get_files_from path
+    Dir[path]
   end
 
   def detailed_cuke_files files = Dir['features/**/*.feature']
@@ -159,6 +172,7 @@ class Mayo::Server
       c["socket"].puts({:display => "got kill message"}.to_json) 
       c["socket"].close
     }
+    @listen = false
     @threads.each{|thread| thread.kill}
   end
 

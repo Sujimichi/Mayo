@@ -9,6 +9,9 @@ class FakeSocket
   def close
   end
 end
+class FakeServer
+
+end
 
 describe Mayo do
 
@@ -149,23 +152,123 @@ describe Mayo do
     end
   end
 
+
+  describe "self.command" do 
+    it 'should call start on the server' do 
+      Mayo::Server.should_receive(:start).and_return(nil)
+      Mayo.command "server"
+    end
+    it 'should call start on the client' do 
+      Mayo::Client.should_receive(:start).and_return(nil)
+      Mayo.command "connect"
+    end
+
+    it 'should call run on the server and pass arguments' do 
+      args = ["run", "this_thing"]
+      Mayo::Server.should_receive(:run).with(args).and_return(nil)      
+      Mayo.command args
+    end
+    it 'should call stop on the server' do 
+      Mayo::Server.should_receive(:stop).and_return(nil)      
+      Mayo.command "stop"
+    end
+
+    
+    
+
+  end
+
   describe Mayo::Server do 
     before(:each) do 
       @server = @s = Mayo::Server.new
     end
 
+    describe "start" do 
+      it 'should start the server'
+
+    end
+    describe "stop" do 
+      it 'should stop the server'
+
+    end
+    describe "run" do 
+      it 'should run the server and pass args'
+
+    end
+
     describe "listen_for_intructions" do 
+      it 'should have some tests to describe listening for instructions' 
+
+    end
+
+    describe "perform(instruction)" do 
+
+      it 'should call stop on the server' do 
+        @server.should_receive(:stop)
+        @server.perform("stop")
+      end
+
+      it 'should call run tests' do 
+        args = ["run", "features", "features/*3/*.feature"]
+        @server.should_receive(:run_tests)
+        @server.perform("run")
+      end
+
+      it 'should call run tests with args' do 
+        args = ["run", "features", "features/*3/*.feature"]
+        @server.should_receive(:run_tests).with(["features", "features/*3/*.feature"])
+        @server.perform(args)
+      end
+
+      it 'should call run tests with args' do 
+        args = ["run", "specs"]
+        @server.should_receive(:run_tests).with(["specs"])
+        @server.perform(args)
+      end
+
+
+
+    end
+
+
+    describe "run tests" do 
       before(:each) do 
-        @cache = Dalli::Client.new('localhost:11211')   
+        @server.should_receive(:update_active_clients).and_return(nil)
+        @client = {"socket" => FakeSocket.new}
+        @server.stub!(:current_clients => [@client])
+        @files = ["some_dir/some_file_1.file", "some_dir/some_file_2.file", "some_dir/some_file_3.file"]
+        @files.stub!(:sort_by => @files) #disable the sort by random
+        
       end
 
-      it 'should call perform with the intruction' do 
-        @cache.set("mayo_instruction", "test_instruction")
-        @server.should_receive(:perform).with("test_instruction")
-        @server.listen_for_instructions
-        @cache.set("mayo_instruction", "stop")
+      it 'should send instrunction to current_clients' do 
+        
+        @server.should_receive(:get_files_from).with("features/**/*.feature").and_return(@files)
+        command = "bundle exec cucumber -p all features/support/ features/step_definitions/ some_dir/some_file_3.file some_dir/some_file_2.file some_dir/some_file_1.file"
+        @client["socket"].should_receive(:puts).with({"run_and_return" => command}.to_json)
+        @server.run_tests "features"
       end
 
+      it 'should send instrunction to current_clients' do 
+        @server.stub!(:get_files_from => @files)
+        command = "bundle exec rspec some_dir/some_file_3.file some_dir/some_file_2.file some_dir/some_file_1.file"
+        @client["socket"].should_receive(:puts).with({"run_and_return" => command}.to_json)
+        @server.run_tests "specs"
+      end
+
+      it 'should send instrunction to current_clients' do 
+        @server.should_receive(:get_files_from).with("features/03*/*.feature").and_return(@files)
+        command = "bundle exec cucumber -p all features/support/ features/step_definitions/ some_dir/some_file_3.file some_dir/some_file_2.file some_dir/some_file_1.file"
+        @client["socket"].should_receive(:puts).with({"run_and_return" => command}.to_json)
+        @server.run_tests "features", "features/03*/*.feature"
+      end
+
+
+      #mayo run
+      #mayo features
+      #mayo specs
+      #mayo features features/03*/*.feature
+      #mayo ruby tasks/thing.rb
 
 
     end
