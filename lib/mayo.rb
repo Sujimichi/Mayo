@@ -1,7 +1,7 @@
 module Mayo
   def self.command args
     Mayo::Server.start if args.include?("server")
-    Mayo::Server.run   if args.include?("run")
+    Mayo::Server.run(args)   if args.include?("run")
     Mayo::Server.stop   if args.include?("stop")
     
     Mayo::Client.start if args.include?("connect")
@@ -19,7 +19,7 @@ class Mayo::Server
     server.listen_for_intructions #listen for instrunctions sent via memcached 
   end
 
-  def self.run
+  def self.run args = nil
     @cache = Dalli::Client.new('localhost:11211')   
     @cache.set("mayo_instruction", "run")
   end
@@ -78,7 +78,7 @@ class Mayo::Server
     end
   end
 
-  def listen_for_intructions
+  def listen_for_instructions
     @cache.set("mayo_instruction", nil) #make sure no old instruction
     puts "waiting for orders"     
     while @cache.get("mayo_instruction").nil?
@@ -87,21 +87,21 @@ class Mayo::Server
     @cache.set("mayo_instruction", nil)     #reset cache
   end
 
-  def perform order
-    puts "got order: #{order}"
-    case order
+  def perform instruction
+    puts "got order: #{instruction}"
+    case instruction
     when "run"
       run_tests
     when "stop"
       return self.stop
     end
-    listen_for_intructions
+    listen_for_instructions
   end
 
   def run_tests
     update_active_clients
     tasks = {
-      :features => {:files => detailed_cuke_files(Dir['features/03*/*.feature']), :command_prefix => "bundle exec cucumber -p all features/support/ features/step_definitions/"},
+      :features => {:files => detailed_cuke_files(Dir['features/**/*.feature']), :command_prefix => "bundle exec cucumber -p all features/support/ features/step_definitions/"},
       :specs => {:files => Dir['spec/**/*spec.rb'], :command_prefix => "bundle exec rspec"}
     }
     task = tasks[:features]
@@ -195,6 +195,7 @@ class Mayo::Client
     Dir.chdir("mayo_testing")   
     client = Mayo::Client.new
     client.register_with_server
+    client.wait_for_orders
   end    
 
   def initialize
@@ -205,22 +206,27 @@ class Mayo::Client
   end
 
   def register_with_server
-    @socket = TCPSocket.open(@server, @server_port)
-    @socket.puts(@client_data.to_json)
-    @server_inf = JSON.parse(@socket.gets)
-    @project_name = @server_inf["project_dir"].split("/").last
-    @project_dir = Dir.getwd + "/" + @project_name
+    @socket = TCPSocket.open(@server, @server_port) #Open a socket to the server
+    @socket.puts(@client_data.to_json)              #Send server info
+    @server_inf = JSON.parse(@socket.gets)          #Get info from server
+
+    @project_name = @server_inf["project_dir"].split("/").last  #take the string after last / as project name
+    @project_dir = Dir.getwd + "/" + @project_name  #project will be put in current dir/<project_name>
     puts "Registered with Mayo Server #{@server_inf["servername"]} for project #{@project_name}"
-    
+  end
+
+  def wait_for_orders
     order = true
     while !order.nil?
+      print "."
       begin
-      order = @socket.gets   # Read lines from the socket
+        order = @socket.gets   # Read lines from the socket
       rescue
         order = nil
       end
       follow_orders order.chomp if order
     end
+
   end
 
   def follow_orders order
@@ -248,9 +254,9 @@ class Mayo::Client
         puts run_command(order[action])
       elsif action.eql?("run_and_return")
         result = run_command(order[action])
-        socket = TCPSocket.open(@server, @server_port + 1)
-        socket.puts(result)
-        socket.close
+        result_socket = TCPSocket.open(@server, @server_port + 1)
+        result_socket.puts(result)
+        result_socket.close
       end
     end
   end
