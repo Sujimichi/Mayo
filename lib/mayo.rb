@@ -147,7 +147,7 @@ class Mayo::Server
     end    
   end
 
-  def get_files_from *path
+  def get_files_from path
     Dir[path]
   end
 
