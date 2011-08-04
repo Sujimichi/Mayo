@@ -1,38 +1,18 @@
 module Mayo
   PORTS = {:connect => 2000, :response => 2001, :instruction => 2002}
 
-  def self.command args
-    Mayo::Server.start if args.include?("server")
-    Mayo::Server.run(args) if args.include?("run")
-    Mayo::Server.stop   if args.include?("stop")   
-    Mayo::Client.start if args.include?("connect")
+  def self.command args                           #The Command line args which Mayo Accepts
+    Mayo::Server.start if args.include?("server") #'mayo server'  - start a mayo server
+    Mayo::Client.start if args.include?("connect")#'mayo connect' - start a client
+    Mayo::Server.run(args) if args.include?("run")#'mayo run args'- sends intructions to active mayo server  
+    Mayo::Server.stop   if args.include?("stop")  #'mayo stop'    - send server a shut down intruction  
   end
 
-  def self.socket_to server, port, &blk
-    socket = TCPSocket.open(server, port)
-    yield(socket)
-    socket.close
+  def self.socket_to server, port, &blk   #helper method to perform some action with a socket
+    socket = TCPSocket.open(server, port) #open socket
+    yield(socket) #perform some logic with socket
+    socket.close  #close the socket
   end
-end
-
-class Mayo::Task
-  def self.for_type(type, args = nil)
-    types = {"features" => FeatureTask, "specs" => SpecTask}
-    t = types[type]
-    t ||= self
-    t.new(type, args)
-  end
-
-  def initialize prefix, jobs
-    @prefix = prefix
-  end
-end
-
-class FeatureTask < Mayo::Task
-
-end
-class SpecTask < Mayo::Task
-
 end
 
 class Mayo::Server
@@ -44,17 +24,13 @@ class Mayo::Server
     server.open_ports #starts 2 threaded processes; one to accept new client connections and the other to accept results
     server.listen_for_instructions #main loop, wait for an instruction 
   end
-
   def self.run *args
     args = "run" if args.empty?
     Mayo.socket_to(Socket.gethostname, Mayo::PORTS[:instruction]){|socket| socket.puts(args) }
   end
-
   def self.stop
     Mayo.socket_to(Socket.gethostname, Mayo::PORTS[:instruction]){|socket| socket.puts("stop") }
   end
-
-  attr_accessor :clients, :listen
 
   def initialize
     puts "Initializing Mayo Server - The Rich Creamy Goodness of your tests will soon be spread."
@@ -71,14 +47,14 @@ class Mayo::Server
     ]
   end
 
-  def listen_for_clients
+  def listen_for_clients  #maintain a TCP port to accept new client signups
     server = TCPServer.open(Mayo::PORTS[:connect])
+    server_data = {:project_dir => @project_dir, :servername => Socket.gethostname} #inf to send to clients on connect
     puts "Port #{Mayo::PORTS[:connect]} open to accept new clients"
-
     while @listen do
-      client = server.accept
+      client = server.accept                                            #wait for a client to connect
       #TODO send the client the servers public key to be added to the clients authorized_keys
-      client.puts({:project_dir => @project_dir, :servername => Socket.gethostname}.to_json)  #Send data to client       
+      client.puts(server_data.to_json)                                  #Send data to client       
       client_data = client.gets                                         #Read info from client       
       client_data = JSON.parse(client_data).merge!("socket" => client)  #Add the socket to the client data
       @clients << client_data                                           #hold the client in Array
@@ -86,33 +62,30 @@ class Mayo::Server
     end
   end
 
-  def listen_for_response
-    server = TCPServer.open(Mayo::PORTS[:response])
+  def listen_for_response   #maintain a TCP port to take data from active clients and display it.  This will change.  Better handling of returned data.
+    server = TCPServer.open(Mayo::PORTS[:response]) 
+    @results ||= []
     while @listen do
-      client = server.accept
-      while data = client.gets
-        puts data
-      end
+      puts read_while_client(server.accept)
       @jobs_left -= 1
-      if @jobs_left == 0
-        t = Time.now
-        puts "WOOOO jobs done"
-        puts (t - @jobs_started_at)
-      end
+      puts "All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds" if @jobs_left == 0
     end
   end
 
-  def listen_for_instructions
+  def listen_for_instructions #maintain a TCP port to take intructions from Mayo.command
     puts "Port #{Mayo::PORTS[:instruction]} open for instructions"
     server = TCPServer.open(Mayo::PORTS[:instruction])
     while @listen
-      c = server.accept
-      orders = []
-      while order = c.gets
-        orders << order.chop
-      end
+      orders = read_while_client(server.accept)
       self.perform(orders) 
     end
+  end
+
+  def read_while_client client, data = [] 
+    while line = client.gets #read data from the client until the client disconects
+      data << line.chop
+    end
+    data
   end
 
   def perform instruction
@@ -129,13 +102,10 @@ class Mayo::Server
     files_for = {"features" => "features/**/*.feature", "specs" => "spec/**/*spec.rb"}
     prefix = {"features" => "bundle exec cucumber -p all features/support/ features/step_definitions/", "specs" => "bundle exec rspec"}
 
-  
-
     type = args[0] || "features"
     files = get_files_from(*args[1].split(" ")) if args[1]
     files ||= get_files_from(files_for[type])
     prefix = prefix[type] || type
-
     files = features_by_scenario(files) if prefix.include?("cucumber")
 
     jobs = divide_tasks files
@@ -147,9 +117,7 @@ class Mayo::Server
     end    
   end
 
-  def get_files_from path
-    Dir[path]
-  end
+  def get_files_from(path);Dir[path];end
 
   def features_by_scenario files
     scenarios = files.map do |path|
@@ -234,16 +202,14 @@ class Mayo::Client
 
   def initialize
     @server = 'yokai'
-    @server_port = 2000
-    username = Dir.getwd.split("/")[2]
-    @client_data = {:username => username, :name => client_name, :working_dir => Dir.getwd}
+    @server_port = Mayo::PORTS[:connect]
+    @client_data = {:username => Dir.getwd.split("/")[2], :name => client_name, :working_dir => Dir.getwd}
   end
 
   def register_with_server
     @socket = TCPSocket.open(@server, @server_port) #Open a socket to the server
     @socket.puts(@client_data.to_json)              #Send server info
     @server_inf = JSON.parse(@socket.gets)          #Get info from server
-
     @project_name = @server_inf["project_dir"].split("/").last  #take the string after last / as project name
     @project_dir = Dir.getwd + "/" + @project_name  #project will be put in current dir/<project_name>
     puts "Registered with Mayo Server #{@server_inf["servername"]} for project #{@project_name}"
@@ -281,14 +247,9 @@ class Mayo::Client
         puts "WHAT? Server is talking rubbish - \"#{order}\""
       end
       action = order.keys[0]
-      if action.eql?("display")
-        puts order[action]
-      elsif action.eql?("run")
-        puts run_command(order[action])
-      elsif action.eql?("run_and_return")
-        result = run_command(order[action])
-        Mayo.socket_to(@server, Mayo::PORTS[:response]){|socket| socket.puts(result) }
-      end
+      return puts order[action] if action.eql?("display")
+      result = run_command(order[action]) if action.include?("run") #either run or run_and_return
+      Mayo.socket_to(@server, Mayo::PORTS[:response]){|socket| socket.puts(result) } if action.eql?("run_and_return")
     end
   end
 

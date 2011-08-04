@@ -242,21 +242,6 @@ describe Mayo do
     end
   end
 
-  describe Mayo::Task do 
-    it 'should return a custom class for features' do 
-      Mayo::Task.for_type("features").should be_a(FeatureTask)
-    end
-    it 'should return a custom class for specs' do 
-      Mayo::Task.for_type("specs").should be_a(SpecTask)
-    end
-    it 'should return the base class for everything else' do 
-      Mayo::Task.for_type("youfatuncle").should be_a(Mayo::Task)
-    end
-
-
-
-  end
-
   describe Mayo::Client do 
 
 
