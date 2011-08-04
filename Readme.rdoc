@@ -1,0 +1,65 @@
+= Mayonaise
+A delicious spread that is great with cucumbers.
+A way to spread your delicious cucumber tests over several machines or instances.
+
+==Usecase
+I have a cucumber test suite which takes over 30 minutes to run.  This results in it only ever being run before a deploy and not continually during development.
+I've looked at running just an 'overview' subset during dev and the whole lot before a commit but that is far from perfect.  I want to run the whole suite and often.
+
+There are several options that enable the distribution of tests (most notably Testjour) but for one reason and another I was unsucsessful with Testjour.  Some of the other options required some config of the project being tested and I'd prefer a 'test catalyst' that did not require any change to either config or tests.
+
+
+So to that end I have created a VERY simple gem.  Its very basic and not fit for general consuption.  That being said; I'm now running my full (normally 30 minute) test suite in 7 minutes.
+
+
+==Basic Usage
+Launch a mayo server in your root directory of the project you want to test;
+    mayo server
+
+Start a mayo client in another directoy either on the same machine or on another;
+    mayo connect
+
+You can run several clients on one machine but they must be started from different directories, ie;
+    sujimichi@yokai:~/testing/client_1$ mayo connect
+    sujimichi@yokai:~/testing/client_2$ mayo connect
+
+
+Once a server is running with some clients attached you can then request actions from the server in another terminal (on the same machine as the server).
+
+To run your features run;
+    mayo run
+
+The clients will run a share of the tests and return thier results to the server.
+As you change your code and want to run the test again, just call mayo run again.
+
+You can also pass some args to run;
+    mayo run specs
+    mayo run features features/just_these/*.feature
+
+
+
+==Requirments
+The machine which runs a client needs to have the public ssh key of the machine running the server added to its authorized_keys file.  This is needed even when client and server are on the same machine and in which case this can be done with;
+    cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+
+The client will call bundle install to get the gems needed, but other requirments need to have been setup before hand; ie rvm, ruby etc.
+
+
+==Concept
+Given a 'directory', a 'program' to run and 'some files' to run in that 'program'.  Mirror the directory to several clients, divide the files to run according to the number of clients and get each client to run the program over its subset of files.
+
+If the command was "bundle exec cucumber feature1.feature feature2.feature" and there are two clients then one client will run "bundle exec cucumber feature1.feature" while the other run "bundle exec cucumber feature2.feature"
+
+
+==Extra
+    mayo run features #run all features in features/**/*.feature
+    mayo run specs    #run all specs in spec/**/*spec.rb
+    mayo run features features/some_feature/*.feature
+
+"features" is just short hand for "bundle exec cucumber -p all features/support/ features/step_definitions/"
+"specs" is shorthand for "bundle exec rspec".
+
+You can run mayo and pass a custom instruction
+
+    mayo run "bundle exec cucumber -p all --tags @whatever" "features/**/*.feature"
+    mayo run "ruby" "somefile.rb someother_file.rb"
