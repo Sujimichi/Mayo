@@ -249,7 +249,7 @@ class Mayo::Client
       action = order.keys[0]
       return puts order[action] if action.eql?("display")
       result = run_command(order[action]) if action.include?("run") #either run or run_and_return
-      Mayo.socket_to(@server, Mayo::PORTS[:response]){|socket| socket.puts(result) } if action.eql?("run_and_return")
+      Mayo.socket_to(@server, Mayo::PORTS[:response]){|socket| socket.puts("Result from #{@client_data[:name]}\n#{result}") } if action.eql?("run_and_return")
     end
   end
 
