@@ -18,6 +18,7 @@ end
 class Mayo::Server
   require 'socket'
   require 'json'
+  require 'mayo/cuke_result_reader'
 
   def self.start   
     server = Mayo::Server.new
@@ -63,12 +64,21 @@ class Mayo::Server
   end
 
   def listen_for_response   #maintain a TCP port to take data from active clients and display it.  This will change.  Better handling of returned data.
+    
     server = TCPServer.open(Mayo::PORTS[:response]) 
     @results ||= []
     while @listen do
-      puts read_while_client(server.accept)
+      @results << read_while_client(server.accept)
+      puts @results.last
       @jobs_left -= 1
-      puts "All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds" if @jobs_left == 0
+      if @jobs_left == 0
+        cr = CukeResultReader.new(@results)
+
+        puts "All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds" 
+        puts cr.failed_steps
+        puts cr.failing_scenarios
+        puts cr.summary
+      end
     end
   end
 
@@ -147,12 +157,12 @@ class Mayo::Server
     clients = current_clients
     print "\nUpdating Active Clients' Data"
     active_clients(clients) do |client|
-      print(".")
       client["socket"].puts({:display => "receiving files"}.to_json)
       send_files_to_client client
       client["socket"].puts("goto_project_dir")
       client["socket"].puts({:run => "bundle install"}.to_json)
       #client["socket"].puts({:run => "bundle exec rake db:migrate && bundle exec rake db:test:prepare"}.to_json)
+      print(".")
     end
     puts "\tUpdated #{clients.size} clients"
   end
@@ -194,7 +204,8 @@ class Mayo::Client
 
   def self.start
     Dir.mkdir("mayo_testing") unless Dir.entries("./").include?("mayo_testing")
-    Dir.chdir("mayo_testing")   
+    Dir.chdir("mayo_testing")
+    @root = Dir.getwd
     client = Mayo::Client.new
     client.register_with_server
     client.wait_for_orders
@@ -240,6 +251,9 @@ class Mayo::Client
     when "goto_project_dir"
       Dir.chdir(@project_dir)
       puts "now in #{Dir.getwd}"
+    when "reset"
+      Dir.chdir(@root)
+      FileUtils.rm_rf(@project_dir)
     else
       begin
         order = JSON.parse(order)

@@ -361,11 +361,10 @@ describe Mayo do
 
       it "should return command results to the server" do 
         @client.should_receive(:run_command).with("some command").and_return("result_data")
-        @socket.should_receive(:puts).with("result_data")
+        @socket.should_receive(:puts).with("Result from #{Socket.gethostname}\nresult_data")
         @socket.should_receive(:close)       
         @client.follow_orders({"run_and_return" => "some command"}.to_json)
       end
-
 
     end
 
