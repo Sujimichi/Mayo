@@ -1,5 +1,5 @@
 class CukeResultReader
-  attr_reader :results, :failed_steps, :failing_scenarios, :summaries
+  attr_reader :results, :failed_steps, :failing_scenarios, :summaries, :progress_markers
 
   def initialize results
     @results = results
@@ -13,6 +13,7 @@ class CukeResultReader
     @failed_steps = []
     @failing_scenarios = []
     @summaries = []
+    @progress_markers = []
     
     @results.each do |result|
       steps = []
@@ -21,19 +22,23 @@ class CukeResultReader
       add_failed_step_line = false
       add_failed_scen_line = false
       result.each do |line|
-        add_failed_step_line = false if line.include?("Failing Scenarios:")
-        steps << line if add_failed_step_line unless line.empty?
+        add_failed_step_line = false if line.include?("Failing Scenarios:")   #Add lines that occur between "(::) failed steps (::)" 
+        steps << line if add_failed_step_line                                 #and "Failing Scenarios:".  These are the failed step lines
         add_failed_step_line = true if line.include?("(::) failed steps (::)")
 
-        add_failed_scen_line = false if line.match(/(\d+) scenarios \(/)
-        scens << line if add_failed_scen_line unless line.empty?
+        add_failed_scen_line = false if line.match(/(\d+) scenario(s|:?) \(/) #Add lines that occur between "Failing Scenarios:" and 
+        scens << line if add_failed_scen_line unless line.empty?              #/(\d+) scenario(s|:?) \(/ ie: '5 senarios (' or '1 scenario ('
         add_failed_scen_line = true if line.include?("Failing Scenarios:")
 
-        summs << line if line.match(/(\d+) scenario(s|:?) \(/)
-        summs << line if line.match(/(\d+) step(s|:?) \(/)
-        summs << line if line.match(/(\d+)m(\d+).(\d+)s/)
+        summs << line if line.match(/(\d+) scenario(s|:?) \(/)  #matches the scenario summary line
+        summs << line if line.match(/(\d+) step(s|:?) \(/)      #matches the step summary line
+        summs << line if line.match(/(\d+)m(\d+).(\d+)s/)       #matches the time taken line
+
+        @progress_markers << line if line.include?("\e[32m.\e[0m") || line.include?("\e[31mF\e[0m") #all progress markers are on the same line so no need to catch each different type.  Assuming there is a . or an F it will catch the line.
 
       end
+      steps.delete_at(steps.size - 1) if steps.last.nil? || steps.last.empty? #remove trailing new line
+
       @failed_steps << steps unless steps.empty?
       @failing_scenarios << scens unless steps.empty?
       @summaries << summs
@@ -52,14 +57,14 @@ class CukeResultReader
     col_reset = "\e[0m"
 
     thangs.each do |k,v|
-    types.each do |type, _|
-      collected = @summaries.map{|s| 
-        m = s[v].match(/(\d+) #{type}/)
-        m = s[v].match(/(\d+) scenario(s|:?)/) if type.eql?(:senarios)
-        m.values_at(1) if m
-      }.flatten.compact.map{|s| s.to_i}.inject{|i,j| i+j}
-      n["#{k}_#{type}".to_sym] = collected unless collected.nil?
-    end
+      types.each do |type, _|
+        collected = @summaries.map{|s| 
+          m = s[v].match(/(\d+) #{type}/)
+          m = s[v].match(/(\d+) scenario/) if type.eql?(:scenarios)
+          m.values_at(1) if m
+        }.flatten.compact.map{|s| s.to_i}.inject{|i,j| i+j}
+        n["#{k}_#{type}".to_sym] = collected unless collected.nil?
+      end
 
     end
 
@@ -96,6 +101,17 @@ class CukeResultReader
     output << time
 
     output
+  end
+
+
+  def display_results    
+    puts progress_markers.join
+    puts "\n\e[31m(::) failed steps (::)\e[0m"
+    puts failed_steps
+    puts "\n\e[31mFailing Scenarios:\e[0m"
+    puts failing_scenarios
+    puts "\nsummary"
+    puts summary
   end
 
 end

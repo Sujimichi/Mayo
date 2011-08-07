@@ -73,14 +73,15 @@ class Mayo::Server
       @jobs_left -= 1
       if @jobs_left == 0
 
+        
+        puts @results.inspect
+        puts "\n\n----------------------------------------------------------------------------------"
+        puts "   All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds"     
+        puts "----------------------------------------------------------------------------------\n\n"
         cr = CukeResultReader.new(@results)
         cr.process_results
-
-        raise cr.inspect
-        puts "All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds" 
-        puts cr.failed_steps
-        puts cr.failing_scenarios
-        puts cr.summary
+        cr.display_results
+        
         @listen = false
         
       end
