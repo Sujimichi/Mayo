@@ -43,8 +43,8 @@ class Mayo::Server
   def open_ports
     @listen = true
     @threads = [ 
-      Thread.new { listen_for_clients }, #Create a thread which accepts connections from new clients
-      Thread.new { listen_for_response } #Create a thread which takes and displays info from clients
+      Thread.new { listen_for_clients }#, #Create a thread which accepts connections from new clients
+      #Thread.new { listen_for_response } #Create a thread which takes and displays info from clients
     ]
   end
 
@@ -72,14 +72,20 @@ class Mayo::Server
       puts @results.last
       @jobs_left -= 1
       if @jobs_left == 0
-        cr = CukeResultReader.new(@results)
 
+        cr = CukeResultReader.new(@results)
+        cr.process_results
+
+        raise cr.inspect
         puts "All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds" 
         puts cr.failed_steps
         puts cr.failing_scenarios
         puts cr.summary
+        @listen = false
+        
       end
     end
+    server.close
   end
 
   def listen_for_instructions #maintain a TCP port to take intructions from Mayo.command
@@ -125,6 +131,7 @@ class Mayo::Server
       command = "#{prefix} #{jobs[index].join(" ")}"
       client["socket"].puts({:run_and_return => command}.to_json)
     end    
+    listen_for_response
   end
 
   def get_files_from(path);Dir[path];end

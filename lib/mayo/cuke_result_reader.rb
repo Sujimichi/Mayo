@@ -29,8 +29,8 @@ class CukeResultReader
         scens << line if add_failed_scen_line unless line.empty?
         add_failed_scen_line = true if line.include?("Failing Scenarios:")
 
-        summs << line if line.match(/(\d+) scenarios \(/)
-        summs << line if line.match(/(\d+) steps \(/)
+        summs << line if line.match(/(\d+) scenario(s|:?) \(/)
+        summs << line if line.match(/(\d+) step(s|:?) \(/)
         summs << line if line.match(/(\d+)m(\d+).(\d+)s/)
 
       end
@@ -55,6 +55,7 @@ class CukeResultReader
     types.each do |type, _|
       collected = @summaries.map{|s| 
         m = s[v].match(/(\d+) #{type}/)
+        m = s[v].match(/(\d+) scenario(s|:?)/) if type.eql?(:senarios)
         m.values_at(1) if m
       }.flatten.compact.map{|s| s.to_i}.inject{|i,j| i+j}
       n["#{k}_#{type}".to_sym] = collected unless collected.nil?
