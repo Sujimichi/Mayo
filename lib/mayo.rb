@@ -15,6 +15,34 @@ module Mayo
   end
 end
 
+
+class Mayo::Job
+  attr_reader :launcher, :ordnance
+  attr_accessor :display
+
+  def initialize launcher = "features", ordnance = nil, display = nil
+    @launcher = launcher
+    @launcher = "bundle exec cucumber -p all features/support/ features/step_definitions/" if launcher.eql?("features")
+    @launcher = "bundle exec rspec" if launcher.eql?("specs")
+    @ordnance = ordnance
+    @display = display
+  end
+
+  def in_groups_of n = 1
+    rand_tasks = @ordnance.sort_by{rand}
+    groups = Array.new(n){[]}
+    i = 0
+    until rand_tasks.empty?
+      groups[i].push(rand_tasks.pop)
+      i+=1
+      i = 0 if i > (groups.size - 1)
+    end
+    groups.map{|g| g.empty? ? nil : "#{@launcher} #{g.join(" ")}" }
+  end
+
+end
+
+
 class Mayo::Server
   require 'socket'
   require 'json'
@@ -43,8 +71,8 @@ class Mayo::Server
   def open_ports
     @listen = true
     @threads = [ 
-      Thread.new { listen_for_clients }#, #Create a thread which accepts connections from new clients
-      #Thread.new { listen_for_response } #Create a thread which takes and displays info from clients
+      Thread.new { listen_for_clients }, #Create a thread which accepts connections from new clients
+      Thread.new { listen_for_response } #Create a thread which takes and displays info from clients
     ]
   end
 
@@ -72,21 +100,27 @@ class Mayo::Server
       puts @results.last
       @jobs_left -= 1
       if @jobs_left == 0
-
-        
         puts @results.inspect
         puts "\n\n----------------------------------------------------------------------------------"
         puts "   All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds"     
         puts "----------------------------------------------------------------------------------\n\n"
         cr = CukeResultReader.new(@results)
+        begin
         cr.process_results
         cr.display_results
-        
-        @listen = false
-        
+        com = cr.failing_scenario_command
+        if com
+          puts "You can run just the failed tests with the command 'mayo run last_failed'"
+          puts "Or you can run this command;"
+          puts "\t\t#{com.join}"
+          @re_run_job = Mayo::Job.new(com[0], com[1].split(" "), "Re-runnnig tests which failed last time")
+        end
+        rescue
+          puts "Unable to interpret resutls"
+        end
+        @results = []
       end
     end
-    server.close
   end
 
   def listen_for_instructions #maintain a TCP port to take intructions from Mayo.command
@@ -108,31 +142,33 @@ class Mayo::Server
   def perform instruction
     puts "got order: #{instruction}"
     return self.stop if instruction.include?("stop") 
-    return self.run_tests if instruction.eql?("run")  
-    self.run_tests *instruction[1..instruction.size] if instruction.is_a?(Array) && instruction[0].eql?("run")
+    job = self.make_job if instruction.eql?("run") #'mayo run' - no args
+    job = self.make_job *instruction[1..instruction.size] if instruction.is_a?(Array) && instruction[0].eql?("run") #'mayo run features files' -with args
+    return puts job if job.is_a?(String)  #when job is a string error message
+    clients = current_clients             #get the current clients
+    return puts("No Clients") if clients.empty?
+    update_active_clients(clients)        #send updated files to clients
+    process_job(job, clients)             #distribute the job amongst the clients
   end
 
-  def run_tests *args
-    return puts("No Clients") if current_clients.empty?
-    update_active_clients
-
-    files_for = {"features" => "features/**/*.feature", "specs" => "spec/**/*spec.rb"}
-    prefix = {"features" => "bundle exec cucumber -p all features/support/ features/step_definitions/", "specs" => "bundle exec rspec"}
-
+  def make_job *args
+    return @re_run_job || "no re run job in history" if args.include?("last_failed")
     type = args[0] || "features"
-    files = get_files_from(*args[1].split(" ")) if args[1]
-    files ||= get_files_from(files_for[type])
-    prefix = prefix[type] || type
-    files = features_by_scenario(files) if prefix.include?("cucumber")
+    files_for = {"features" => "features/**/*.feature", "specs" => "spec/**/*spec.rb"}   
+    args.delete_at(0) #remove the type arg.  
+    files = args unless args.empty? #if array of files then no further action needed for files.
+    files = get_files_from(*args.first.split(" ")) if args.size.eql?(1) #If array of 1, consider it to be a path PATTERN ie: features/**/*.feature  
+    files ||= get_files_from(files_for[type]) #When no args present, use files_for hash with type for key to find the PATTERN
+    files = features_by_scenario(files) if type.include?("features") ||type.include?("cucumber") 
+    Mayo::Job.new(type, files)
+  end
 
-    jobs = divide_tasks files
-    @jobs_left = jobs.size
+  def process_job job, clients
+    @jobs_left = clients.size
     @jobs_started_at = Time.now
-    active_clients do |client, index|
-      command = "#{prefix} #{jobs[index].join(" ")}"
-      client["socket"].puts({:run_and_return => command}.to_json)
-    end    
-    listen_for_response
+    puts job.display  #Display job messgage if any
+    jobs_for_clients = job.in_groups_of(clients.size).zip(clients) #assign the different clients thier part of the whole job
+    jobs_for_clients.each { |job, client| client["socket"].puts({:run_and_return => job}.to_json) unless job.nil? } #send instruction to client
   end
 
   def get_files_from(path);Dir[path];end
@@ -141,8 +177,15 @@ class Mayo::Server
     scenarios = files.map do |path|
       lines = File.open(path, 'r'){|f| f.readlines}
       selected = []
+      before_feature_def = true
+      ignore_file = false
+      last_line = ""
       lines.each_with_index do |line, index|
-        selected << "#{path}:#{index+1}" if line.match(/Scenario/)
+        before_feature_def = false if line.match(/^Feature/)
+        ignore_file = true if before_feature_def && line.include?("@wip")
+    
+        selected << "#{path}:#{index+1}" if line.match(/Scenario/) && !(last_line.include?("@wip") || ignore_file)
+        last_line = line
       end
       selected
     end
@@ -161,8 +204,7 @@ class Mayo::Server
     groups
   end
 
-  def update_active_clients
-    clients = current_clients
+  def update_active_clients clients = current_clients
     print "\nUpdating Active Clients' Data"
     active_clients(clients) do |client|
       client["socket"].puts({:display => "receiving files"}.to_json)

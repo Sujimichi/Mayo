@@ -3,26 +3,33 @@ A delicious spread that is great with cucumbers.
 A way to spread your delicious cucumber tests over several machines or instances.
 
 ==Usecase
-I have a cucumber test suite which takes over 30 minutes to run.  This results in it only ever being run before a deploy and not continually during development.
-I've looked at running just an 'overview' subset during dev and the whole lot before a commit but that is far from perfect.  I want to run the whole suite and often.
+I have a cucumber test suite which takes over 30 minutes to run.  This results in it only ever being run before a major deploy and not continualy during development. I've tried running just an 'overview' subset during dev and then the whole lot before a commit but that is far from perfect.  I want to run the whole suite and often.
 
-There are several options that enable the distribution of tests (most notably Testjour) but for one reason and another I was unsucsessful with Testjour.  Some of the other options required some config of the project being tested and I'd prefer a 'test catalyst' that did not require any change to either config or tests.
+There are several solutions which enable distribution of tests (most notably Testjour) but for one reason and another I was unsucsessful with Testjour.  Some of the other solutions require some config of the project being tested and I'd prefer a 'test catalyst' that did not require any change to either config or tests.
 
+http://www.ruby-forum.com/topic/166445
 
-So to that end I have created a VERY simple gem.  Its very basic and not fit for general consuption.  That being said; I'm now running my full (normally 30 minute) test suite in 7 minutes.
+==The Mayo Solution
+Mayo is still very much a working concept.  Its pretty basic and not fit for general consuption.  That being said; I'm now running my full (normally 30 minute) test suite in 5 minutes.
+
+The idea behind it is very simple; Where you have a directory in which you have a command and some actions to run, ie:
+    #in your project directory
+    bundle exec cucumber all_your_features
+
+Instead a "server" commands a number of "clients" each with a copy of the working directory to run a subset of the actions ie;
+    bundle exec cucumber a_subset_of_features
+
+As each client completes its portion its results are collected and displayed by the server.
+
+When used to run cucumber features mayo will not just split the files between the clients it divides the scenarios between them.
 
 
 ==Basic Usage
 Launch a mayo server in your root directory of the project you want to test;
     mayo server
 
-Start a mayo client in another directoy either on the same machine or on another;
+Start a mayo client on another machine
     mayo connect
-
-You can run several clients on one machine but they must be started from different directories, ie;
-    sujimichi@yokai:~/testing/client_1$ mayo connect
-    sujimichi@yokai:~/testing/client_2$ mayo connect
-
 
 Once a server is running with some clients attached you can then request actions from the server in another terminal (on the same machine as the server).
 
@@ -52,6 +59,15 @@ If the command was "bundle exec cucumber feature1.feature feature2.feature" and 
 
 
 ==Extra
+You can run several clients on one machine but they must be started from different directories, ie;
+    sujimichi@yokai:~/testing/client_1$ mayo connect
+    sujimichi@yokai:~/testing/client_2$ mayo connect
+
+While it is possible to run several instances of cucumber on the same machine from within different directories, there is a positive correllation between number of instances and number of "false-failing" tests.
+
+
+
+
     mayo run features #run all features in features/**/*.feature
     mayo run specs    #run all specs in spec/**/*spec.rb
     mayo run features features/some_feature/*.feature

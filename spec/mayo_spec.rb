@@ -10,9 +10,9 @@ class FakeSocket
   end
 end
 class FakeServer
-
 end
-
+class FakeClient
+end
 describe Mayo do
 
   describe "self.commands" do 
@@ -76,135 +76,148 @@ describe Mayo do
 
     end
 
-    describe "perform(instruction)" do 
+    describe "perform(instruction)" do
+      before(:each) do 
+        @job = Mayo::Job.new("features", ["feature1.feature", "feature2.feature"])
+        @server.stub!(:current_clients => ["foo", "bar"])
+        @server.stub!(:make_job => @job)
+        @server.stub!(:process_job => nil)
+        @server.stub!(:update_active_clients => nil)        
+      end
 
       it 'should call stop on the server' do 
         @server.should_receive(:stop)
         @server.perform("stop")
       end
 
-      it 'should call run tests' do 
-        args = ["run", "features", "features/*3/*.feature"]
-        @server.should_receive(:run_tests)
+      it "should call make job with just 'run'" do 
+        @server.should_receive(:make_job)
         @server.perform("run")
       end
-
-      it 'should call run tests with args' do 
-        args = ["run", "features", "features/*3/*.feature"]
-        @server.should_receive(:run_tests).with("features", "features/*3/*.feature")
-        @server.perform(args)
+      it 'should call make_jobs with args' do 
+        @server.should_receive(:make_job).with("features", "features/*3/*.feature")
+        @server.perform(["run", "features", "features/*3/*.feature"])
+      end
+      it 'should call make job with args' do 
+        @server.should_receive(:make_job).with("specs")
+        @server.perform(["run", "specs"])
       end
 
-      it 'should call run tests with args' do 
-        args = ["run", "specs"]
-        @server.should_receive(:run_tests).with("specs")
-        @server.perform(args)
+      it 'should call update active clients' do 
+        @server.should_receive(:update_active_clients)        
+        @server.perform(["run", "specs"])
+      end
+
+      it 'should call process_job with the job returned by make_job' do 
+        @server.should_receive(:process_job).with(@job, ["foo", "bar"])
+        @server.perform(["run", "features"])
+      end
+
+      it 'should not call process_job when the job is a string, it should display it' do 
+        @server.stub!(:make_job => "some error message")
+        @server.should_not_receive(:process_job)
+        @server.should_receive(:puts).once.with("some error message")
+        @server.should_receive(:puts) #as it will also receive puts elsewhere
+        @server.perform(["run", "last_failed"])
       end
 
     end
-
-
-    describe "run tests" do 
+    describe "perform(intructions) when there are no clients" do 
       before(:each) do 
-        @client1 = {"socket" => FakeSocket.new}
-        @client2 = {"socket" => FakeSocket.new}
-        @server.stub!(:current_clients => [@client1, @client2])
-        @files = ["some_dir/some_file_1.file", "some_dir/some_file_2.file", "some_dir/some_file_3.file"]
-        @files.stub!(:sort_by => @files) #disable the sort by random
-        @server.should_receive(:update_active_clients).and_return(nil)
-        @server.stub!(:features_by_scenario => [])
-      end
-        #command = "bundle exec cucumber -p all features/support/ features/step_definitions/ some_dir/some_file_3.file some_dir/some_file_2.file some_dir/some_file_1.file"
-        #@client["socket"].should_receive(:puts).with({"run_and_return" => command}.to_json)
-
-      it "can be called with no args to load features" do 
-        @server.should_receive(:get_files_from).with("features/**/*.feature").and_return(@files)
-        @server.run_tests "features"
-      end
-
-      it "can be called with 'specs' to load specs" do 
-        @server.should_receive(:get_files_from).with("spec/**/*spec.rb").and_return(@files)
-        @server.run_tests "specs"
-      end
-
-      it "can be called with 'features and paths' to load specific specific features" do 
-        @server.should_receive(:get_files_from).with("features/03*/*.feature").and_return(@files)
-        @server.run_tests "features", "features/03*/*.feature"
-      end
-
-      it "can be called with 'features and paths' to load specific a specific feature" do 
-        @server.should_receive(:get_files_from).with("features/thisdir/that.feature", "features/thisdir/this.feature").and_return(@files)
-        @server.run_tests "features", "features/thisdir/that.feature features/thisdir/this.feature"
-      end
-
-      it 'should send both clients the first arg and split the files (2nd arg) between them' do 
-        command1 = "with_this_executable run_this/file.rb"
-        command2 = "with_this_executable and_this/other_file.rb"
-        @client1["socket"].should_receive(:puts).with({"run_and_return" => command1}.to_json)
-        @client2["socket"].should_receive(:puts).with({"run_and_return" => command2}.to_json)
-        @files = ["run_this/file.rb", "and_this/other_file.rb"]
-        @files.stub!(:sort_by => @files.reverse) #disable the sort by random, and reverse to account for the use of array.pop. otherwise client1 => command2, client2 => command1.  Just for testing layout, normaly its randomized so is not important.
-        @server.should_receive(:get_files_from).with("run_this/file.rb", "and_this/other_file.rb").and_return(@files)
-        @server.run_tests "with_this_executable", "run_this/file.rb and_this/other_file.rb"
-      end
-
-      it 'should send both clients spec instructions and a split of the files' do 
-        command1 = "bundle exec rspec spec/file_spec.rb spec/yet_other_file_spec.rb"
-        command2 = "bundle exec rspec spec/other_file_spec.rb"
-        @client1["socket"].should_receive(:puts).with({"run_and_return" => command1}.to_json)
-        @client2["socket"].should_receive(:puts).with({"run_and_return" => command2}.to_json)
-        @files = ["spec/file_spec.rb", "spec/other_file_spec.rb", "spec/yet_other_file_spec.rb"]
-        @files.stub!(:sort_by => @files.reverse) 
-        @server.should_receive(:get_files_from).with("spec/**/*spec.rb").and_return(@files)
-        @server.run_tests "specs"
-      end
-
-      it 'should send both clients feature instructions and a split of the files, split by scenario' do 
-        feature_pre = "bundle exec cucumber -p all features/support/ features/step_definitions/"
-        command1 = "#{feature_pre} features/thing.feature:1 features/yet_other.feature:1 features/daft.feature:1"
-        command2 = "#{feature_pre} features/thing.feature:4 features/yet_other.feature:8 features/daft.feature:12"
-        @client1["socket"].should_receive(:puts).with({"run_and_return" => command1}.to_json)
-        @client2["socket"].should_receive(:puts).with({"run_and_return" => command2}.to_json)
-        @files = ["spec/file_spec.rb", "spec/other_file_spec.rb", "spec/yet_other_file_spec.rb"]
-        @server.should_receive(:get_files_from).with("features/**/*.feature").and_return(@files)
-        @files.stub!(:sort_by => @files.reverse) 
-
-
-        features = ["features/thing.feature:1", "features/thing.feature:4", "features/yet_other.feature:1", "features/yet_other.feature:8", "features/daft.feature:1", "features/daft.feature:12"]
-        features.stub!(:sort_by => features.reverse) 
-        @server.should_receive(:features_by_scenario).with(@files).and_return(features)
-        
-        @server.run_tests "features"
-      end
-
-
-
-
-
-      it 'can be called' do
-        @server.should_receive(:get_files_from).with("features/thisdir/that.feature", "features/thisdir/this.feature").and_return(@files)
-        @server.run_tests "bundle exec cucumber", "features/thisdir/that.feature features/thisdir/this.feature"
-      end
-
-
-      #mayo run
-      #mayo run features
-      #mayo run specs
-      #mayo run features features/03*/*.feature
-      #mayo run ruby "tasks/thing.rb tasks/otherthing.rb"
-
-
-    end
-
-    
-    describe "run tests (when no clients)" do 
-      it 'should not call update_active_clients' do 
-        @server.should_not_receive(:active_clients)
-        @server.should_not_receive(:get_files_from)
         @server.stub!(:current_clients => [])
-        @server.run_tests
       end
+      it 'should not call update_active_clients' do 
+        @server.should_not_receive(:update_active_clients)        
+        @server.perform(["run", "specs"])
+      end
+      it 'should not call update_active_clients' do 
+        @server.should_not_receive(:process_job)        
+        @server.perform(["run", "specs"])
+      end
+      
     end
+
+
+    describe "make_job" do 
+      before(:each) do
+        @files = ["this.file", "that.file"]
+      end
+
+      it 'should return a Mayo::Job' do 
+        @server.stub!(:get_files_from => @files)
+        job = @server.make_job(["specs"])
+        job.should be_a(Mayo::Job)
+      end
+
+      it 'should send a type and auto selected Spec files to Mayo::Job.new' do        
+        Mayo::Job.should_receive(:new).with("specs", @files)
+        @server.should_receive(:get_files_from).with("spec/**/*spec.rb").and_return(@files)
+        @server.make_job("specs")
+      end
+
+      it 'should send a type and auto selected Feature files to Mayo::Job.new' do        
+        Mayo::Job.should_receive(:new).with("features", @files)
+        @server.should_receive(:features_by_scenario).and_return(@files)
+        @server.should_receive(:get_files_from).with("features/**/*.feature").and_return(@files)
+        @server.make_job("features")
+      end
+
+      it 'should send type and files (passed in as string) to Mayo::Job.new' do 
+        @server.should_receive(:get_files_from).with("my_random.file", "my_linear.file").and_return(["my_random.file", "my_linear.file"]) #essentiall just passes thou
+        Mayo::Job.should_receive(:new).with("specs", ["my_random.file", "my_linear.file"])
+        @server.make_job(*["specs", "my_random.file my_linear.file"])
+      end
+
+      it 'should pass type and files (passed in as *args) onto Mayo::Job.new' do 
+        Mayo::Job.should_receive(:new).with("specs", ["my_random.file", "my_linear.file"])
+        @server.should_not_receive(:get_files_from)
+        @server.make_job(*["specs", "my_random.file", "my_linear.file"] )
+      end
+
+      it "should return a 're_run_job'" do 
+        re_run_job = Mayo::Job.new("features", ["failed_thing.file", "other_failed_thing.file"])
+        @server.instance_variable_set("@re_run_job", re_run_job)
+        job = @server.make_job(*["run", "last_failed"] )
+        job.should == re_run_job
+        Mayo::Job.should_not_receive(:new)
+      end
+
+      it 'should return a string message if no re_run_job' do 
+        job = @server.make_job(*["run", "last_failed"] )
+        job.should be_a(String)
+        job.downcase.should be_include("no re run job")
+      end
+
+    end
+
+    describe "process_job" do 
+      before(:each) do 
+        files = ["thishere.file", "thatthar.file"]
+        files.should_receive(:sort_by).and_return(files) #disable the sort by rand which is done to the files passed into Mayo::Job.new
+        @job = Mayo::Job.new("features", files)
+        @client_1 = {"socket" => FakeSocket.new}
+        @client_2 = {"socket" => FakeSocket.new}       
+        @clients = [ @client_1, @client_2 ]
+      end
+
+      it 'should call each client supplied with a socket instuction' do       
+        @client_1["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thatthar.file\"}")
+        @client_2["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thishere.file\"}")
+        @server.process_job @job, @clients
+      end
+
+      it 'should not call excess clients with any command' do 
+        @client_3 = {"socket" => FakeSocket.new}       
+        @clients = [ @client_1, @client_2, @client_3 ]
+        @client_1["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thatthar.file\"}")
+        @client_2["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thishere.file\"}")
+        @client_3["socket"].should_not_receive(:puts)
+        @server.process_job @job, @clients
+      end
+
+    end
+
+
     describe "dividing tasks" do 
 
       before(:each) do       
@@ -229,16 +242,70 @@ describe Mayo do
         groups.map{|g| g.size}.should == [4,3]
       end
 
-      it 'should randomize the tasks' do 
-        tasks = %w[foo bar lar dar tar mar rar]     
-        @s.stub!(:current_clients => Array.new(4))
-        g1 = @s.divide_tasks tasks
-        g2 = @s.divide_tasks tasks
-        g1.size.should == 4
-        g2.size.should == 4
-        g1.should_not == g2
-      end
 
+    end
+  end
+
+  describe Mayo::Job do 
+
+    #Mayo::Job.new("features")
+    #Mayo::Job.new("features", "features/dir/feature.feature:5 features/dir/feature.feature:42")
+    #Mayo::Job.new("bundle exec cucumber -p all", "features/dir/feature.feature:5 features/dir/feature.feature:42")
+    #Mayo::Job.new("bundle exec rspec", "spec/models/entity_spec.rb spec/models/moo_spec.rb")
+    
+    it "should have a mapping for the launcher arg 'features'" do 
+      @job = Mayo::Job.new("features", ["features/dir/feature.feature:5", "features/dir/feature.feature:42", "features/dir/feature.feature:64"])
+      @job.launcher.should == "bundle exec cucumber -p all features/support/ features/step_definitions/"
+    end
+
+    it "should have a mapping for the launcher arg 'specs'" do 
+      @job = Mayo::Job.new("specs", ["some.file", "some_other.file", "yet_another.file"])
+      @job.launcher.should == "bundle exec rspec"
+    end
+  
+    it "should pass on any other launcher arg " do 
+      @job = Mayo::Job.new("bundle exec ruby")
+      @job.launcher.should == "bundle exec ruby"
+    end
+
+    describe "in_groups_of(n) - with rand disabled" do
+      before(:each) do
+        files = ["some.file", "some_other.file", "yet_another.file"]
+        files.should_receive(:sort_by).and_return(files)
+        @job = Mayo::Job.new("some exec command", files)
+      end
+      it "should divide ordnance into 2 groups and prefex each group with the launcher" do 
+        @job.in_groups_of(2).should == [
+          "some exec command yet_another.file some.file",
+          "some exec command some_other.file"
+        ]
+      end
+      it "should divide ordnance into 2 groups and prefex each group with the launcher" do 
+        @job.in_groups_of(3).should == [
+          "some exec command yet_another.file",
+          "some exec command some_other.file", 
+          "some exec command some.file"
+        ]
+      end
+      it "should divide ordnance into 2 groups and prefex each group with the launcher" do 
+        @job.in_groups_of(4).should == [
+          "some exec command yet_another.file",
+          "some exec command some_other.file", 
+          "some exec command some.file",
+          nil
+        ]
+      end
+    end 
+
+    describe "in_groups_of(n) - with rand" do
+      before(:each) do 
+        @job = Mayo::Job.new("some exec command", ["some.file", "some_other.file", "yet_another.file"])
+      end
+      it 'should randomize the tasks' do 
+        g1 = @job.in_groups_of(3)
+        g2 = @job.in_groups_of(3)
+        g1.should_not == g2
+      end     
     end
   end
 

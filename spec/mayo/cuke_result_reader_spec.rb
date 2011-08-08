@@ -31,6 +31,10 @@ describe CukeResultReader do
 
       end
 
+      it 'should be able to present the failing scenarios as a command' do 
+        @reader.failing_scenario_command.should == ["bundle exec cucumber -p all features/support features/step_definitions", "features/07_reports_panel/deleting_reports.feature:5 features/07_reports_panel/create_reports.feature:11"]
+      end
+
       it 'should collect the summary info from each result' do 
         @reader.summaries.size.should == 3
         @reader.summaries.should== [
@@ -68,6 +72,11 @@ describe CukeResultReader do
         "19 steps (\e[32m19 passed\e[0m)", 
         "1m16.208s"
       ]     
+    end
+
+    it 'should have empty? failing_scenarios and failed_steps' do 
+      @reader.failing_scenarios.should be_empty
+      @reader.failed_steps.should be_empty
     end
 
 

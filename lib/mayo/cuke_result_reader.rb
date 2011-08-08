@@ -48,6 +48,11 @@ class CukeResultReader
     
   end
 
+  def failing_scenario_command
+    command = ["bundle exec cucumber -p all features/support features/step_definitions"]
+    command << @failing_scenarios.map{|s| s.sub("cucumber -p all", "").split("#").first.gsub("\e[31m","").gsub("\e[90m","").gsub("\e[0m","").gsub(" ","")}.join(" ")
+  end
+
   def summary
     n= {}
     #n[:scenarios] = @summaries.map{|s| s[0].match(/(\d+) scenarios/).values_at(1)}.flatten.map{|s| s.to_i}.inject{|i,j| i+j}
@@ -106,9 +111,9 @@ class CukeResultReader
 
   def display_results    
     puts progress_markers.join
-    puts "\n\e[31m(::) failed steps (::)\e[0m"
-    puts failed_steps
-    puts "\n\e[31mFailing Scenarios:\e[0m"
+    puts "\n\e[31m(::) failed steps (::)\e[0m" unless failed_steps.empty?
+    puts failed_steps 
+    puts "\n\e[31mFailing Scenarios:\e[0m" unless failing_scenarios.empty?
     puts failing_scenarios
     puts "\nsummary"
     puts summary
