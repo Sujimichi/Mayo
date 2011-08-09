@@ -36,7 +36,7 @@ You can also re-run the tests which failed in the previous run.
 
 ==Install
 Install the mayo gem on the server and client machines.  It's not rubygem worthy yet so just grab it from here and build the gem;
-    git clone git@github.com:Sujimichi/Mayo.git
+    git clone git://github.com/Sujimichi/Mayo.git
     cd mayo
     bundle
     rake install
