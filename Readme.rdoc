@@ -1,12 +1,12 @@
 = Mayo
 A delicious spread that is great with cucumbers / A way to spread your delicious cucumber features over several machines.
-NB: not Mayonaise, it's Mayo, cos it's Bri'ish innit!
+NB: not Mayonnaise, it's Mayo, cos it's Bri'ish innit!
 
-Mayo is a command line gem to help speed the running of cucumber tests by spreading the work over serveral machines.  
+Mayo is a command line gem to help speed the running of cucumber tests by spreading the work over several machines.  
 Its primary function is to spread cucumber features but can also be used to spread rspec tests and other commands.
 
 
-Mayo is still very a work in progress.  Its pretty basic and not fit for general consuption.  That being said; I'm now running my full (normally 30 minute) test suite in 5 minutes.
+Mayo is still very a work in progress.  Its pretty basic and not fit for general consumption.  That being said; I'm now running my full (normally 30 minute) test suite in 5 minutes.
 Comments, suggestions, forks and whatnot all very welcome!
 
 
@@ -22,7 +22,7 @@ Once a server is running with some clients attached you can then request actions
 To run your features run;
     mayo run features
 
-The clients will run a share of the tests and return thier results to the server.
+The clients will run a share of the tests and return their results to the server.
 As you change your code and want to run the test again, just call mayo run again.
 
 You can also pass some args to run;
@@ -37,11 +37,11 @@ Install the mayo gem on the server and client machines.  It's not rubygem worthy
     bundle
     rake install
 
-==Requirments
+==Requirements
 The machine which runs a client needs to have the public ssh key of the machine running the server added to its authorized_keys file.  This is needed even when client and server are on the same machine and in which case this can be done with;
     cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 
-The client will run `bundle install` to get the gems needed, but other requirments need to have been setup before hand; ie rvm, ruby, rubygems etc.
+The client will run `bundle install` to get the gems needed, but other requirements need to have been setup before hand; ie rvm, ruby, rubygems etc.
 
 
 
@@ -56,7 +56,7 @@ With Mayo, a "server" commands a number of "clients" each with a copy of the wor
 
 Before any command is run on the client it will have its working directory updated by the server using rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output. 
 
-==SubSplitting Features
+==Sub-Splitting Features
 
 When used to run cucumber features mayo will not just split the files between the clients it divides the scenarios between them.
 
@@ -66,7 +66,7 @@ You can run several clients on one machine but they must be started from differe
     sujimichi@yokai:~/testing/client_1$ mayo connect
     sujimichi@yokai:~/testing/client_2$ mayo connect
 
-While it is possible to run several instances of cucumber on the same machine from within different directories, there is a positive correllation between number of instances and number of "false-failing" tests.
+While it is possible to run several instances of cucumber on the same machine from within different directories, there is a positive correlation between number of instances and number of "false-failing" tests.
 
 
 
@@ -83,11 +83,11 @@ You can run mayo and pass a custom instruction (this is still very experimental 
 
 
 ==Why did I build Mayo?
-I have a cucumber test suite for a rails app which takes over 30 minutes to run.  This results in it only ever being run before a major deploy and not continualy during development. I've tried running just an 'overview' subset during dev and then the whole lot before a commit but that is far from perfect.  I want to run the whole suite and often.
+I have a cucumber test suite for a rails app which takes over 30 minutes to run.  This results in it only ever being run before a major deploy and not continually during development. I've tried running just an 'overview' subset during dev and then the whole lot before a commit but that is far from perfect.  I want to run the whole suite and often.
 
-There are several solutions which enable distribution of tests (most notably Testjour) but for one reason and another I was unsucsessful with Testjour.  Some of the other solutions require some config of the project being tested and I'd prefer a 'test catalyst' that did not require any change to either config or tests.
+There are several solutions which enable distribution of tests (most notably Testjour) but for one reason and another I was unsuccessful with Testjour.  Some of the other solutions require some config of the project being tested and I'd prefer a 'test catalyst' that did not require any change to either config or tests.
 http://www.ruby-forum.com/topic/166445
     
-===Licence
+===License
 Mayo is released under the MIT license.
 
