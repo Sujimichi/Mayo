@@ -1,5 +1,6 @@
 = Mayo
-A delicious spread that is great with cucumbers / A way to spread your delicious cucumber features over several machines.
+A delicious spread that's great with cucumbers / A way to spread your delicious cucumber features over several machines.
+
 NB: not Mayonnaise, it's Mayo, cos it's Bri'ish innit!
 
 Mayo is a command line gem to help speed the running of cucumber tests by spreading the work over several machines.  
@@ -66,7 +67,7 @@ You can run several clients on one machine but they must be started from differe
     sujimichi@yokai:~/testing/client_1$ mayo connect
     sujimichi@yokai:~/testing/client_2$ mayo connect
 
-While it is possible to run several instances of cucumber on the same machine from within different directories, there is a positive correlation between number of instances and number of "false-failing" tests.
+While it is possible to run several instances of cucumber on the same machine from within different directories, there is (not surprisingly) a positive correlation between number of instances and number of "false-failing" tests.
 
 
 
