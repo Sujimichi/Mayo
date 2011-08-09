@@ -57,9 +57,16 @@ With Mayo, a "server" commands a number of "clients" each with a copy of the wor
 
 Before any command is run on the client it will have its working directory updated by the server using rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output. 
 
-==Sub-Splitting Features
+Mayo will also randomize the tests to decrease the chance of one test always being run on the same client.  
 
-When used to run cucumber features mayo will not just split the files between the clients it divides the scenarios between them.
+Mayo does not need any change to be made to the project being tested, not even test env configs.  I felt that its important for this just to be a work spreader and to have no impact on the project.  
+
+
+==Dividing the Load.
+
+When used to run rpsec tests each client will be instructed to run a share of the *_spec.rb files.  So this is not a good solution when you only have 1 spec file!
+
+When used to run cucumber features however mayo will not just split the files between the clients it divides the scenarios between them.  So one .feature file with several scenarios will be split over several clients.  
 
 
 ==Extra
