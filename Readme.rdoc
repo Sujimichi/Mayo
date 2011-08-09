@@ -47,43 +47,49 @@ The machine which runs a client needs to have the public ssh key of the machine 
     cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 
 
-The client will run `bundle install` to get the gems needed, but other requirements need to have been setup before hand; ie rvm, ruby, rubygems etc.
-
+The client will run `bundle install` to get the gems needed, but other requirements need to have been setup before hand; ie rvm, ruby, rubygems, bundler etc.
 
 
 
 ==The Mayo Solution
-The idea behind it is very simple; Mirror the directory containing the files to be tested to several client machines.  Then run a command on the client and collect the response.  The command diriects the clients to do a portion of the whole task.
+The notion behind it is very simple; Mirror the directory containing the files to be tested to several client machines.  Then run a command on the client and collect the response.  The command diriects the clients to do a portion of the whole task.
 
-Take the command 
+For example, the command;
     bundle exec cucumber features/**/*.feature
 
 This would run cucumber with whatever files where matched by features/**/*.feature.  Mayo will take that command and pass the first part "bundle exec cucumber" to each client but with only a subset of the files matched.  
 
-In more general terms, if the command was some_launcher thing1.file thing2.file and there where two clients then each client will work on one file.  A third client would be redundant but really Mayo function is to spread the load of large test suites.  
+In more general terms, if the command was "some_launcher thing1.file thing2.file" and there where two clients, then each client would work on one file.  In this example a third client would be redundant, however Mayo is indented to run large test suites with many files.  
 
-When running cucumber features (Mayo's primary design aim) a single feature file can be process by several clients with each client running different scenarios. When given the command `cucumber some.feature` Mayo will find the lines which define scenarios and send the clients more granular commands ie:
-    cucumber some.feature:5 some.feature:16 feature:28            #<-command send to 1st client
-    cucumber some.feature:8 some.feature:21 feature:35 feature:42 #<-command send to 2nd client
+When running cucumber features (Mayo's primary design aim) a single feature file can be processed by several clients with each client running different scenarios. When given the command `cucumber some.feature` Mayo will find the lines which define scenarios and send the clients more granular commands ie:
+    cucumber some.feature:5 some.feature:16 feature:28            #<-command sent to 1st client
+    cucumber some.feature:8 some.feature:21 feature:35 feature:42 #<-command sent to 2nd client
+
 
 With either just files or specific scenarios the order is randomized before being assigned to clients.  a) This prevents the same test always being run on the same client b) its just good to add some noise!
 
 
-Before a client is sent a command to process it is first sent an updated copy of the directory over rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output. 
+Before a client is sent a command to process it is first sent an updated copy of the directory over rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  The server comunicates the commands and responces between the clients using Ruby TCPSockets.  
 
+In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output.  With other commands (ie rspec) each clients output is simple output to the terminal which the server is in as they become ready.  
 
 Mayo does not need any change to be made to the project being tested.  I felt that its important for this just to be a work spreader and to have no impact on the project.  
 
 
 ==Notes
-You can run several clients on one machine but they must be started from different directories, ie;
+You can just simply run several clients in different terms on one machine but they must be started from different directories, ie;
     sujimichi@yokai:~/testing/client_1$ mayo connect
     sujimichi@yokai:~/testing/client_2$ mayo connect
 
-While it is possible to run several instances of cucumber on the same machine from within different directories, there is (not surprisingly) a positive correlation between number of instances and number of "false-failing" tests.
+While it is possible to run several instances of cucumber on the same machine, there is (not surprisingly) a positive correlation between number of instances and number of "false-failing" tests!  Works ok for rspec and probably will be ok for some other commands, but not recommended for cucumber.  Its best to use other physical or virtual machines.  
+
+The goal of getting cucumber tests to run faster is not about computational power, its about the speed at which dumb browsers can take input.  Simply spliting features between two instances of cucumber (each on a separate virutal machine running on the same physical machine) will almost certainly halve the run time.  With 5 clients I've been able to bring a 30 minute test suite down to 6 minutes.  
 
 
+I am finding that, perhaps due to being randomly split or being run on different machines, some weaker tests are more likely to fail as a result of be spread with Mayo.  
 
+
+==Running Custom Commands (more experimental)
     mayo run features #run all features in features/**/*.feature
     mayo run specs    #run all specs in spec/**/*spec.rb
     mayo run features features/some_feature/*.feature
@@ -91,7 +97,7 @@ While it is possible to run several instances of cucumber on the same machine fr
 "features" is just short hand for "bundle exec cucumber -p all features/support/ features/step_definitions/"
 "specs" is shorthand for "bundle exec rspec".
 
-You can run mayo and pass a custom instruction (this is still very experimental and not well tested)
+You can also run a custom instruction (this is still very experimental and not well tested)
     mayo run "bundle exec cucumber -p all --tags @whatever" "features/**/*.feature"
     mayo run "ruby" "somefile.rb someother_file.rb"
 
