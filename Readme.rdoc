@@ -7,7 +7,7 @@ Mayo is a command line gem to help speed the running of cucumber tests by spread
 Its primary function is to spread cucumber features but can also be used to spread rspec tests and other commands.
 
 
-Mayo is still very a work in progress.  Its pretty basic and not fit for general consumption.  That being said; I'm now running my full (normally 30 minute) test suite in 5 minutes.
+Mayo is still very much a work in progress.  Its pretty basic and not fit for general consumption.  That being said; I'm now running my full (normally 30 minute) test suite in 5 minutes.
 Comments, suggestions, forks and whatnot all very welcome!
 
 
@@ -30,17 +30,22 @@ You can also pass some args to run;
     mayo run specs
     mayo run features features/just_these/*.feature
 
+You can also re-run the tests which failed in the previous run.  
+    mayo run last_failed 
+
 
 ==Install
-Install the mayo gem on the server and client machines.  It's not rubygem worthy yet so just grab it from here;
+Install the mayo gem on the server and client machines.  It's not rubygem worthy yet so just grab it from here and build the gem;
     git clone git@github.com:Sujimichi/Mayo.git
     cd mayo
     bundle
     rake install
 
+
 ==Requirements
-The machine which runs a client needs to have the public ssh key of the machine running the server added to its authorized_keys file.  This is needed even when client and server are on the same machine and in which case this can be done with;
+The machine which runs a client needs to have the public ssh key of the machine running the server added to its authorized_keys file.  This is needed even when client and server are on the same machine and in which case it can be done with;
     cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+
 
 The client will run `bundle install` to get the gems needed, but other requirements need to have been setup before hand; ie rvm, ruby, rubygems etc.
 
@@ -48,28 +53,29 @@ The client will run `bundle install` to get the gems needed, but other requireme
 
 
 ==The Mayo Solution
-The idea behind it is very simple; Where you have a directory in which you have a command and some actions to run, ie:
-    #in your project directory
-    bundle exec cucumber all_your_features
+The idea behind it is very simple; Mirror the directory containing the files to be tested to several client machines.  Then run a command on the client and collect the response.  The command diriects the clients to do a portion of the whole task.
 
-With Mayo, a "server" commands a number of "clients" each with a copy of the working directory to run a subset of the actions ie;
-    bundle exec cucumber a_subset_of_features
+Take the command 
+    bundle exec cucumber features/**/*.feature
 
-Before any command is run on the client it will have its working directory updated by the server using rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output. 
+This would run cucumber with whatever files where matched by features/**/*.feature.  Mayo will take that command and pass the first part "bundle exec cucumber" to each client but with only a subset of the files matched.  
 
-Mayo will also randomize the tests to decrease the chance of one test always being run on the same client.  
+In more general terms, if the command was some_launcher thing1.file thing2.file and there where two clients then each client will work on one file.  A third client would be redundant but really Mayo function is to spread the load of large test suites.  
 
-Mayo does not need any change to be made to the project being tested, not even test env configs.  I felt that its important for this just to be a work spreader and to have no impact on the project.  
+When running cucumber features (Mayo's primary design aim) a single feature file can be process by several clients with each client running different scenarios. When given the command `cucumber some.feature` Mayo will find the lines which define scenarios and send the clients more granular commands ie:
+    cucumber some.feature:5 some.feature:16 feature:28            #<-command send to 1st client
+    cucumber some.feature:8 some.feature:21 feature:35 feature:42 #<-command send to 2nd client
 
-
-==Dividing the Load.
-
-When used to run rpsec tests each client will be instructed to run a share of the *_spec.rb files.  So this is not a good solution when you only have 1 spec file!
-
-When used to run cucumber features however mayo will not just split the files between the clients it divides the scenarios between them.  So one .feature file with several scenarios will be split over several clients.  
+With either just files or specific scenarios the order is randomized before being assigned to clients.  a) This prevents the same test always being run on the same client b) its just good to add some noise!
 
 
-==Extra
+Before a client is sent a command to process it is first sent an updated copy of the directory over rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output. 
+
+
+Mayo does not need any change to be made to the project being tested.  I felt that its important for this just to be a work spreader and to have no impact on the project.  
+
+
+==Notes
 You can run several clients on one machine but they must be started from different directories, ie;
     sujimichi@yokai:~/testing/client_1$ mayo connect
     sujimichi@yokai:~/testing/client_2$ mayo connect
