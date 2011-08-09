@@ -3,7 +3,7 @@ module Mayo
 
   def self.command args                           #The Command line args which Mayo Accepts
     Mayo::Server.start if args.include?("server") #'mayo server'  - start a mayo server
-    Mayo::Client.start if args.include?("connect")#'mayo connect' - start a client
+    Mayo::Client.start(args[1]) if args.include?("connect")#'mayo connect' - start a client
     Mayo.socket_to(Socket.gethostname, Mayo::PORTS[:instruction]){|socket| socket.puts(args)  } if args.include?("run")  #'mayo run args'- sends intructions to active mayo server  
     Mayo.socket_to(Socket.gethostname, Mayo::PORTS[:instruction]){|socket| socket.puts("stop")} if args.include?("stop") #'mayo stop' - send server a shut down instruction  
   end
@@ -239,22 +239,23 @@ class Mayo::Client
   require 'json'
   require 'mayo/version'
 
-  def self.start
+  def self.start server_name
     Dir.mkdir("mayo_testing") unless Dir.entries("./").include?("mayo_testing")
     Dir.chdir("mayo_testing")
     @root = Dir.getwd
     client = Mayo::Client.new
-    client.register_with_server
+    client.register_with_server(server_name)
     client.wait_for_orders
   end    
 
-  def initialize
-    @server = 'yokai'
+  def initialize 
     @server_port = Mayo::PORTS[:connect]
     @client_data = {:username => Dir.getwd.split("/")[2], :name => Socket.gethostname, :working_dir => Dir.getwd, :mayo_version => Mayo::VERSION}
   end
 
-  def register_with_server
+  def register_with_server server_name
+    #raise server_name.inspect
+    @server = server_name
     @socket = TCPSocket.open(@server, @server_port) #Open a socket to the server
     @socket.puts(@client_data.to_json)              #Send server info
     @server_inf = JSON.parse(@socket.gets)          #Get info from server

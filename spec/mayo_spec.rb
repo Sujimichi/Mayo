@@ -40,7 +40,7 @@ describe Mayo do
       end
       it 'should call start on the client' do 
         Mayo::Client.should_receive(:start).and_return(nil)
-        Mayo.command "connect"
+        Mayo.command ["connect", "servername"]
       end
 
       it 'should send a run instruction' do 
@@ -403,24 +403,33 @@ describe Mayo do
           Dir.mkdir("tmp") unless Dir.entries("./").include?("tmp")
           Dir.chdir("tmp")
           FileUtils.rm_rf("mayo_testing")
-          f = Mayo::Client.new
-          f.should_receive(:register_with_server).once
-          f.should_receive(:wait_for_orders).once
-          Mayo::Client.should_receive(:new).and_return(f)
+          @c = Mayo::Client.new
+          @c.should_receive(:wait_for_orders).once
+          
+          Mayo::Client.should_receive(:new).and_return(@c)
         end
         after(:each) do 
           Dir.chdir(@dir)
         end
 
         it 'should create a mayo_testing folder to work in' do 
-          Mayo::Client.start
+          @c.should_receive(:register_with_server)
+          Mayo::Client.start("servername")
           Dir.getwd.should == @dir + "/tmp/mayo_testing"
         end
 
         it 'should use one if already present' do 
+          @c.should_receive(:register_with_server)
           Dir.mkdir("mayo_testing")
-          Mayo::Client.start
+          Mayo::Client.start("servername")
           Dir.getwd.should == @dir + "/tmp/mayo_testing"
+        end
+
+        it 'should take the servers hostname' do 
+          socket = FakeSocket.new
+          socket.stub!(:gets => {:project_dir => "/somedir/test_project", :servername => "someserver"}.to_json)
+          TCPSocket.should_receive(:open).with("servername", Mayo::PORTS[:connect]).and_return(socket)
+          Mayo::Client.start("servername")
         end
 
       end
@@ -437,18 +446,18 @@ describe Mayo do
         end
 
         it 'should obtain information from the socket' do 
-          @client.register_with_server       
+          @client.register_with_server("someserver")
           @client.instance_variable_get("@server_inf").should_not be_nil
         end
 
         it 'should get the project name' do 
-          @client.register_with_server       
+          @client.register_with_server("someserver")       
           @client.instance_variable_get("@server_inf")["project_dir"].should == "/somedir/test_project"
           @client.instance_variable_get("@project_name").should == "test_project"
         end
 
         it 'should get the server name' do 
-          @client.register_with_server       
+          @client.register_with_server("someserver")       
           @client.instance_variable_get("@server_inf")["servername"].should == "someserver"
         end
 
@@ -456,7 +465,7 @@ describe Mayo do
           @client.instance_variable_get("@client_data").should_not be_nil
           cd = @client.instance_variable_get("@client_data")
           @socket.should_receive(:puts).with(cd.to_json)
-          @client.register_with_server       
+          @client.register_with_server("someserver")       
         end
 
       end
