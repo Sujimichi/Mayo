@@ -15,6 +15,20 @@ class FakeClient
 end
 describe Mayo do
 
+  describe "having the TCP ports free to run tests!" do 
+    ports = [:connect, :response , :instruction]
+    ports.each do |port|
+      it "should have port #{Mayo::PORTS[port]} open" do 
+        begin
+          server = TCPServer.open(Mayo::PORTS[port]) 
+          server.close
+        rescue
+          raise "unable to use port #{Mayo::PORTS[port]}"
+        end
+      end
+    end
+  end
+
   describe "self.commands" do 
     it 'should call start on the server' do 
       Mayo::Server.should_receive(:start).and_return(nil)
@@ -71,9 +85,108 @@ describe Mayo do
       end
 
     end
+
+    def take_server_down t = "client"
+      sleep 0.2 #to give previous intructions a chance to complete
+      @server.instance_variable_get("@#{t}_server").close
+      sleep 0.4 #to give the server time to close
+      @threads.each{|t| t.kill}
+    end
+
+    describe "listen_for_clients" do
+      before(:each) do 
+        @server.instance_variable_set("@listen", true)
+        @server.instance_variable_set("@project_dir", "/some_dir")
+        @threads = []
+        @threads << Thread.new {  @server.listen_for_clients  }
+      end
+
+      it 'should listen for a client connect and hold that clients info and socket' do 
+        #simulate client action
+        socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+        socket.puts({:username => "foobar", :name => "yourface", :working_dir => "/here"}.to_json)
+
+        take_server_down
+        @server.clients.should_not be_empty
+        @server.clients[0]["username"].should == "foobar"
+        @server.clients[0]["socket"].should be_a(TCPSocket)
+      end
+
+      it 'should listen for multiple client connects' do 
+        socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+        socket.puts({:username => "foobar", :name => "yourface", :working_dir => "/here"}.to_json)
+        socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+        socket.puts({:username => "fibble", :name => "yourface", :working_dir => "/here"}.to_json)
+       
+        take_server_down       
+        @server.clients.should_not be_empty
+        @server.clients[0]["username"].should == "foobar"
+        @server.clients[1]["username"].should == "fibble"
+      end
+
+      it 'should listen for symultanious multiple client connects' do
+        threads = []
+        threads << Thread.new{
+          socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+          socket.puts({:username => "foobar", :name => "yourface", :working_dir => "/here"}.to_json)
+        }
+        threads << Thread.new {
+          socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+          socket.puts({:username => "fibble", :name => "yourface", :working_dir => "/here"}.to_json)
+        }
+        threads.each{|t| t.join}
+        take_server_down              
+        @server.clients.size.should == 2
+        @server.clients.map{|c| c["username"]}.sort.should == ["foobar", "fibble"].sort
+      end
+
+      it 'should provide the client with info about the server' do 
+        socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+        r = socket.gets
+        take_server_down
+        r.chop.should == {:project_dir => "/some_dir", :servername => Socket.gethostname}.to_json
+      end
+ 
+    end
+
+    describe "listen_for_response" do 
+      before(:each) do 
+        @server.instance_variable_set("@listen", true)
+        @server.instance_variable_set("@project_dir", "/some_dir")
+        @threads = []
+        @threads << Thread.new {  @server.listen_for_response  }
+      end
+      it 'should take info from clients and put it in @results' do 
+        @server.instance_variable_get("@results").should be_empty
+        socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:response])
+        r = socket.puts("this is a test\nwith some multiline data")
+        socket.close
+        take_server_down("response")
+        @server.instance_variable_get("@results")[0].should == ["this is a test", "with some multiline data"]
+      end
+
+      it 'should take info from two clients responding at the same time' do 
+        Thread.new{
+          socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:response])
+          r = socket.puts("this is one client\nwith some multiline data")
+          socket.close
+        } 
+        Thread.new {
+          socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:response])
+          r = socket.puts("this is another client\nalso with some data")
+          socket.close
+        }
+        take_server_down("response")       
+        r = [["this is one client", "with some multiline data"], ["this is another client", "also with some data"]]
+        @server.instance_variable_get("@results").sort.should == r.sort
+      end
+
+
+    end
+
+
     describe "listen_for_intructions" do 
       it 'should have some tests to describe listening for instructions' 
-
     end
 
     describe "perform(instruction)" do
@@ -214,35 +327,6 @@ describe Mayo do
         @client_3["socket"].should_not_receive(:puts)
         @server.process_job @job, @clients
       end
-
-    end
-
-
-    describe "dividing tasks" do 
-
-      before(:each) do       
-        @s.stub!(:current_clients => Array.new(3))
-      end
-
-      it 'should divide tasks into as many arrays as there are clients' do 
-        tasks = %w[foo bar lar dar tar mar rar]     
-        @s.stub!(:current_clients => Array.new(4))
-        groups = @s.divide_tasks tasks
-        groups.size.should == 4
-        groups.map{|g| g.size}.should == [2,2,2,1]
-
-        @s.stub!(:current_clients => Array.new(3))
-        groups = @s.divide_tasks tasks
-        groups.size.should == 3
-        groups.map{|g| g.size}.should == [3,2,2]
-
-        @s.stub!(:current_clients => Array.new(2))
-        groups = @s.divide_tasks tasks
-        groups.size.should == 2
-        groups.map{|g| g.size}.should == [4,3]
-      end
-
-
     end
   end
 
@@ -297,10 +381,11 @@ describe Mayo do
       end
     end 
 
-    describe "in_groups_of(n) - with rand" do
-      before(:each) do 
-        @job = Mayo::Job.new("some exec command", ["some.file", "some_other.file", "yet_another.file"])
-      end
+    describe "in_groups_of(n) - with rand" do             #This test has a chance of failing
+      before(:each) do                                    #its aim is to test that the given array of files 
+        files = %w[foo bar dar mar gar tar lar far nar]   #get randomly sorted.  Therefore the output of two 
+        @job = Mayo::Job.new("some exec command", files)  #concecutive calls should not ==.  Except when rand is
+      end                                                 #randomly the same in each case.
       it 'should randomize the tasks' do 
         g1 = @job.in_groups_of(3)
         g2 = @job.in_groups_of(3)
@@ -310,7 +395,6 @@ describe Mayo do
   end
 
   describe Mayo::Client do 
-
 
     describe "starting clients" do 
       before(:each) do 

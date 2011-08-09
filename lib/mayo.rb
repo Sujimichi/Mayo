@@ -48,6 +48,8 @@ class Mayo::Server
   require 'json'
   require 'mayo/cuke_result_reader'
 
+  attr_accessor :clients
+
   def self.start   
     server = Mayo::Server.new
     server.open_ports #starts 2 threaded processes; one to accept new client connections and the other to accept results
@@ -66,6 +68,7 @@ class Mayo::Server
     @project_dir = Dir.getwd   
     @clients = []
     @threads = []
+    @results = []
   end
 
   def open_ports
@@ -77,48 +80,29 @@ class Mayo::Server
   end
 
   def listen_for_clients  #maintain a TCP port to accept new client signups
-    server = TCPServer.open(Mayo::PORTS[:connect])
+    @client_server = TCPServer.open(Mayo::PORTS[:connect])
     server_data = {:project_dir => @project_dir, :servername => Socket.gethostname} #inf to send to clients on connect
     puts "Port #{Mayo::PORTS[:connect]} open to accept new clients"
     while @listen do
-      client = server.accept                                            #wait for a client to connect
-      #TODO send the client the servers public key to be added to the clients authorized_keys
-      client.puts(server_data.to_json)                                  #Send data to client       
-      client_data = client.gets                                         #Read info from client       
-      client_data = JSON.parse(client_data).merge!("socket" => client)  #Add the socket to the client data
-      @clients << client_data                                           #hold the client in Array
-      puts "Signing up client: #{client_data['name']}"
+      Thread.start(@client_server.accept) do |client|                   #wait for a client to connect and start a new thread
+        #TODO send the client the servers public key to be added to the clients authorized_keys
+        client.puts(server_data.to_json)                                #Send data to client       
+        client_data = client.gets                                       #Read info from client       
+        client_data = JSON.parse(client_data).merge!("socket" => client)#Add the socket to the client data
+        @clients << client_data                                         #hold the client in Array
+        puts "Signing up client: #{client_data['name']}"
+      end
     end
   end
 
   def listen_for_response   #maintain a TCP port to take data from active clients and display it.  This will change.  Better handling of returned data.
-    
-    server = TCPServer.open(Mayo::PORTS[:response]) 
-    @results ||= []
+    @response_server = TCPServer.open(Mayo::PORTS[:response]) 
     while @listen do
-      @results << read_while_client(server.accept)
-      puts @results.last
-      @jobs_left -= 1
-      if @jobs_left == 0
-        puts @results.inspect
-        puts "\n\n----------------------------------------------------------------------------------"
-        puts "   All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds"     
-        puts "----------------------------------------------------------------------------------\n\n"
-        cr = CukeResultReader.new(@results)
-        begin
-        cr.process_results
-        cr.display_results
-        com = cr.failing_scenario_command
-        if com
-          puts "You can run just the failed tests with the command 'mayo run last_failed'"
-          puts "Or you can run this command;"
-          puts "\t\t#{com.join}"
-          @re_run_job = Mayo::Job.new(com[0], com[1].split(" "), "Re-runnnig tests which failed last time")
-        end
-        rescue
-          puts "Unable to interpret resutls"
-        end
-        @results = []
+      Thread.start(@response_server.accept) do |client|
+        @results << read_while_client(client) #This could be improved! Multiple threads are sharing @results.  Replace with a memcached sort and collect later?
+        puts @results.last
+        @jobs_left -= 1     
+        show_results if @jobs_left == 0
       end
     end
   end
@@ -137,6 +121,27 @@ class Mayo::Server
       data << line.chop
     end
     data
+  end
+
+  def show_results
+    puts @results.inspect
+    puts "\n\n----------------------------------------------------------------------------------"
+    puts "   All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds"     
+    puts "----------------------------------------------------------------------------------\n\n"
+    cr = CukeResultReader.new(@results)
+    begin
+      cr.process_results
+      cr.display_results
+      com = cr.failing_scenario_command
+      if com
+        puts "You can run just the failed tests with the command 'mayo run last_failed'\nOr run without mayo you can use this command;\n\t#{com.join}"
+        @re_run_job = Mayo::Job.new(com[0], com[1].split(" "), "Re-runnnig tests which failed last time")
+      end
+    rescue
+      puts "Unable to interpret results"
+    end
+    @results = []
+
   end
 
   def perform instruction
@@ -159,7 +164,7 @@ class Mayo::Server
     files = args unless args.empty? #if array of files then no further action needed for files.
     files = get_files_from(*args.first.split(" ")) if args.size.eql?(1) #If array of 1, consider it to be a path PATTERN ie: features/**/*.feature  
     files ||= get_files_from(files_for[type]) #When no args present, use files_for hash with type for key to find the PATTERN
-    files = features_by_scenario(files) if type.include?("features") ||type.include?("cucumber") 
+    files = features_by_scenario(files) if type.include?("features") || type.include?("cucumber") 
     Mayo::Job.new(type, files)
   end
 
@@ -190,18 +195,6 @@ class Mayo::Server
       selected
     end
     scenarios.flatten
-  end
-
-  def divide_tasks tasks
-    rand_tasks = tasks.sort_by{rand}
-    groups = Array.new(current_clients.size){[]}
-    i = 0
-    until rand_tasks.empty?
-      groups[i].push(rand_tasks.pop)
-      i+=1
-      i = 0 if i > (groups.size - 1)
-    end
-    groups
   end
 
   def update_active_clients clients = current_clients
@@ -313,7 +306,9 @@ class Mayo::Client
       action = order.keys[0]
       return puts order[action] if action.eql?("display")
       result = run_command(order[action]) if action.include?("run") #either run or run_and_return
-      Mayo.socket_to(@server, Mayo::PORTS[:response]){|socket| socket.puts("Result from #{@client_data[:name]}\n#{result}") } if action.eql?("run_and_return")
+      Mayo.socket_to(@server, Mayo::PORTS[:response]){|socket| 
+        socket.puts("Result from #{@client_data[:name]}\n#{result}") 
+      } if action.eql?("run_and_return")
     end
   end
 
