@@ -109,14 +109,18 @@ class CukeResultReader
   end
 
 
-  def display_results    
-    puts progress_markers.join
-    puts "\n\e[31m(::) failed steps (::)\e[0m" unless failed_steps.empty?
-    puts failed_steps 
-    puts "\n\e[31mFailing Scenarios:\e[0m" unless failing_scenarios.empty?
-    puts failing_scenarios
-    puts "\nsummary"
-    puts summary
+  def display_results run_time = nil
+    text = [ progress_markers.join ]
+    text << "\n\e[31m(::) failed steps (::)\e[0m" unless failed_steps.empty?
+    text << failed_steps 
+    text << "\n\e[31mFailing Scenarios:\e[0m\n" unless failing_scenarios.empty?
+    text << failing_scenarios
+    text << "\nSummary:"
+    text << summary
+    t =  "Time shown is the summed cucumber time."
+    t << "  Mayo run time was #{run_time}" if run_time
+    text << t
+    puts text
   end
 
 end

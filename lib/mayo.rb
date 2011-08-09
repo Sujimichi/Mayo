@@ -4,8 +4,8 @@ module Mayo
   def self.command args                           #The Command line args which Mayo Accepts
     Mayo::Server.start if args.include?("server") #'mayo server'  - start a mayo server
     Mayo::Client.start if args.include?("connect")#'mayo connect' - start a client
-    Mayo::Server.run(args) if args.include?("run")#'mayo run args'- sends intructions to active mayo server  
-    Mayo::Server.stop   if args.include?("stop")  #'mayo stop'    - send server a shut down intruction  
+    Mayo.socket_to(Socket.gethostname, Mayo::PORTS[:instruction]){|socket| socket.puts(args)  } if args.include?("run")  #'mayo run args'- sends intructions to active mayo server  
+    Mayo.socket_to(Socket.gethostname, Mayo::PORTS[:instruction]){|socket| socket.puts("stop")} if args.include?("stop") #'mayo stop' - send server a shut down instruction  
   end
 
   def self.socket_to server, port, &blk   #helper method to perform some action with a socket
@@ -14,7 +14,6 @@ module Mayo
     socket.close  #close the socket
   end
 end
-
 
 class Mayo::Job
   attr_reader :launcher, :ordnance
@@ -39,14 +38,13 @@ class Mayo::Job
     end
     groups.map{|g| g.empty? ? nil : "#{@launcher} #{g.join(" ")}" }
   end
-
 end
-
 
 class Mayo::Server
   require 'socket'
   require 'json'
   require 'mayo/cuke_result_reader'
+  require 'mayo/version'
 
   attr_accessor :clients
 
@@ -55,16 +53,9 @@ class Mayo::Server
     server.open_ports #starts 2 threaded processes; one to accept new client connections and the other to accept results
     server.listen_for_instructions #main loop, wait for an instruction 
   end
-  def self.run *args
-    args = "run" if args.empty?
-    Mayo.socket_to(Socket.gethostname, Mayo::PORTS[:instruction]){|socket| socket.puts(args) }
-  end
-  def self.stop
-    Mayo.socket_to(Socket.gethostname, Mayo::PORTS[:instruction]){|socket| socket.puts("stop") }
-  end
-
+ 
   def initialize
-    puts "Initializing Mayo Server - The Rich Creamy Goodness of your tests will soon be spread."
+    puts "Initialising Mayo Server - preparing to spread"
     @project_dir = Dir.getwd   
     @clients = []
     @threads = []
@@ -90,7 +81,9 @@ class Mayo::Server
         client_data = client.gets                                       #Read info from client       
         client_data = JSON.parse(client_data).merge!("socket" => client)#Add the socket to the client data
         @clients << client_data                                         #hold the client in Array
-        puts "Signing up client: #{client_data['name']}"
+        t = "Signing up client: #{client_data['name']}"
+        t << " - running version: #{client_data["mayo_version"]}" if client_data["mayo_version"] #&& client_data["mayo_version"] != Mayo::VERSION
+        puts t
       end
     end
   end
@@ -131,10 +124,10 @@ class Mayo::Server
     cr = CukeResultReader.new(@results)
     begin
       cr.process_results
-      cr.display_results
+      cr.display_results(Time.now - @jobs_started_at)
       com = cr.failing_scenario_command
       if com
-        puts "You can run just the failed tests with the command 'mayo run last_failed'\nOr run without mayo you can use this command;\n\t#{com.join}"
+        puts "You can run just the failed tests again with the command 'mayo run last_failed'\nOr to run without mayo you can use this command;\n\n\t#{com.join(' ')}"
         @re_run_job = Mayo::Job.new(com[0], com[1].split(" "), "Re-runnnig tests which failed last time")
       end
     rescue
@@ -151,13 +144,13 @@ class Mayo::Server
     job = self.make_job *instruction[1..instruction.size] if instruction.is_a?(Array) && instruction[0].eql?("run") #'mayo run features files' -with args
     return puts job if job.is_a?(String)  #when job is a string error message
     clients = current_clients             #get the current clients
-    return puts("No Clients") if clients.empty?
+    return puts("\e[31mNo Clients Connected\e[0m - Run 'mayo connect #{Socket.gethostname}' on client machines to connect clients") if clients.empty?
     update_active_clients(clients)        #send updated files to clients
     process_job(job, clients)             #distribute the job amongst the clients
   end
 
   def make_job *args
-    return @re_run_job || "no re run job in history" if args.include?("last_failed")
+    return @re_run_job || "\e[31mNo Recent failed results to run\e[0m - This command is available after running feature tests which have failures" if args.include?("last_failed")
     type = args[0] || "features"
     files_for = {"features" => "features/**/*.feature", "specs" => "spec/**/*spec.rb"}   
     args.delete_at(0) #remove the type arg.  
@@ -169,10 +162,10 @@ class Mayo::Server
   end
 
   def process_job job, clients
-    @jobs_left = clients.size
     @jobs_started_at = Time.now
     puts job.display  #Display job messgage if any
     jobs_for_clients = job.in_groups_of(clients.size).zip(clients) #assign the different clients thier part of the whole job
+    @jobs_left = jobs_for_clients.select{|j,c| j}.size
     jobs_for_clients.each { |job, client| client["socket"].puts({:run_and_return => job}.to_json) unless job.nil? } #send instruction to client
   end
 
@@ -244,6 +237,7 @@ end
 class Mayo::Client
   require 'socket'
   require 'json'
+  require 'mayo/version'
 
   def self.start
     Dir.mkdir("mayo_testing") unless Dir.entries("./").include?("mayo_testing")
@@ -257,7 +251,7 @@ class Mayo::Client
   def initialize
     @server = 'yokai'
     @server_port = Mayo::PORTS[:connect]
-    @client_data = {:username => Dir.getwd.split("/")[2], :name => client_name, :working_dir => Dir.getwd}
+    @client_data = {:username => Dir.getwd.split("/")[2], :name => Socket.gethostname, :working_dir => Dir.getwd, :mayo_version => Mayo::VERSION}
   end
 
   def register_with_server
@@ -316,10 +310,6 @@ class Mayo::Client
     result = `#{command}`
     puts "command complete"
     result
-  end
-
-  def client_name
-    Socket.gethostname
   end
 
 end
