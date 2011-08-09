@@ -254,7 +254,6 @@ class Mayo::Client
   end
 
   def register_with_server server_name
-    #raise server_name.inspect
     @server = server_name
     @socket = TCPSocket.open(@server, @server_port) #Open a socket to the server
     @socket.puts(@client_data.to_json)              #Send server info
