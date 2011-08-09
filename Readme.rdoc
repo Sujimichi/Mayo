@@ -7,7 +7,7 @@ Mayo is a command line gem to help speed the running of cucumber tests by spread
 Its primary function is to spread cucumber features but can also be used to spread rspec tests and other commands.
 
 
-Mayo is still very much a work in progress.  Its pretty basic and not fit for general consumption.  That being said; I'm now running my full (normally 30 minute) test suite in 5 minutes.
+Mayo is still very much a work in progress.  Its pretty basic and not fit for general consumption.  That being said; I'm now running my full (normally 30 minute) test suite in around 6 minutes.
 Comments, suggestions, forks and whatnot all very welcome!
 
 
