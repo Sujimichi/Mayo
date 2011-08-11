@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    mayo (0.0.11)
+    mayo (0.1.1)
       dalli
       json
 

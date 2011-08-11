@@ -302,16 +302,16 @@ describe Mayo do
         end
 
         it 'should call each client supplied with a socket instuction' do       
-          @client_1["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thatthar.file\"}")
-          @client_2["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thishere.file\"}")
+          @client_1["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thishere.file\"}")
+          @client_2["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thatthar.file\"}")
           @server.process_job @job, @clients
         end
 
         it 'should not call excess clients with any command' do 
           @client_3 = {"socket" => FakeSocket.new}       
           @clients = [ @client_1, @client_2, @client_3 ]
-          @client_1["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thatthar.file\"}")
-          @client_2["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thishere.file\"}")
+          @client_1["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thishere.file\"}")
+          @client_2["socket"].should_receive(:puts).once.with("{\"run_and_return\":\"bundle exec cucumber -p all features/support/ features/step_definitions/ thatthar.file\"}")
           @client_3["socket"].should_not_receive(:puts)
           @server.process_job @job, @clients
         end
@@ -361,23 +361,22 @@ describe Mayo do
         end
         it "should divide ordnance into 2 groups and prefex each group with the launcher" do 
           @job.in_groups_of(2).should == [
-            "some exec command yet_another.file some.file",
+            "some exec command some.file yet_another.file",
             "some exec command some_other.file"
           ]
         end
         it "should divide ordnance into 2 groups and prefex each group with the launcher" do 
           @job.in_groups_of(3).should == [
-            "some exec command yet_another.file",
+            "some exec command some.file",
             "some exec command some_other.file", 
-            "some exec command some.file"
+            "some exec command yet_another.file"
           ]
         end
         it "should divide ordnance into 2 groups and prefex each group with the launcher" do 
           @job.in_groups_of(4).should == [
-            "some exec command yet_another.file",
-            "some exec command some_other.file", 
             "some exec command some.file",
-            nil
+            "some exec command some_other.file", 
+            "some exec command yet_another.file"
           ]
         end
       end 
@@ -522,7 +521,7 @@ describe Mayo do
 
         it "should return command results to the server" do 
           @client.should_receive(:run_command).with("some command").and_return("result_data")
-          @socket.should_receive(:puts).with("Result from #{Socket.gethostname}\nresult_data")
+          @socket.should_receive(:puts).with("Result from #{Socket.gethostname};\n\nresult_data\n\n")
           @socket.should_receive(:close)       
           @client.follow_orders({"run_and_return" => "some command"}.to_json)
         end

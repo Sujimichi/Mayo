@@ -1,6 +1,5 @@
 module Mayo
   PORTS = {:connect => 2000, :response => 2001, :instruction => 2002}
-
   def self.command args                           #The Command line args which Mayo Accepts
     Mayo::Server.start if args.include?("server") #'mayo server'  - start a mayo server
     Mayo::Client.start(args[1]) if args.include?("connect")#'mayo connect' - start a client
@@ -29,14 +28,10 @@ class Mayo::Job
 
   def in_groups_of n = 1
     rand_tasks = @ordnance.sort_by{rand}
-    groups = Array.new(n){[]}
-    i = 0
-    until rand_tasks.empty?
-      groups[i].push(rand_tasks.pop)
-      i+=1
-      i = 0 if i > (groups.size - 1)
-    end
-    groups.map{|g| g.empty? ? nil : "#{@launcher} #{g.join(" ")}" }
+    j = 0
+    task_map = Array.new(rand_tasks.size){ j+=1; j=1 if j>n; j} #make array same size as tasks with pattern [1,2,3,..,n,1,2,3,..,n etc]
+    groups = rand_tasks.group_by{|t| task_map[rand_tasks.index(t)] }.values #group the tasks according to the above pattern     
+    groups.map{|g| g.empty? ? nil : "#{@launcher} #{g.join(" ")}" } #map the group, prefixing the launcher command
   end
 end
 
@@ -45,9 +40,8 @@ class Mayo::Server
   require 'json'
   require 'mayo/cuke_result_reader'
   require 'mayo/version'
-
   attr_accessor :clients
-
+  
   def self.start   
     server = Mayo::Server.new
     server.open_ports #starts 2 threaded processes; one to accept new client connections and the other to accept results
@@ -57,17 +51,11 @@ class Mayo::Server
   def initialize
     puts "Initialising Mayo Server - preparing to spread"
     @project_dir = Dir.getwd   
-    @clients = []
-    @threads = []
-    @results = []
+    @clients, @threads, @results = Array.new(3){[]}
   end
-
   def open_ports
     @listen = true
-    @threads = [ 
-      Thread.new { listen_for_clients }, #Create a thread which accepts connections from new clients
-      Thread.new { listen_for_response } #Create a thread which takes and displays info from clients
-    ]
+    @threads = [ Thread.new { listen_for_clients },Thread.new { listen_for_response } ] #Create threads running TCPServers
   end
 
   def listen_for_clients  #maintain a TCP port to accept new client signups
@@ -78,8 +66,7 @@ class Mayo::Server
       Thread.start(@client_server.accept) do |client|                   #wait for a client to connect and start a new thread
         #TODO send the client the servers public key to be added to the clients authorized_keys
         client.puts(server_data.to_json)                                #Send data to client       
-        client_data = client.gets                                       #Read info from client       
-        client_data = JSON.parse(client_data).merge!("socket" => client)#Add the socket to the client data
+        client_data = JSON.parse(client.gets).merge!("socket" => client)#Add the socket to the client data
         @clients << client_data                                         #hold the client in Array
         t = "Signing up client: #{client_data['name']}"
         t << " - running version: #{client_data["mayo_version"]}" if client_data["mayo_version"] #&& client_data["mayo_version"] != Mayo::VERSION
@@ -103,7 +90,7 @@ class Mayo::Server
   def listen_for_instructions #maintain a TCP port to take intructions from Mayo.command
     puts "Port #{Mayo::PORTS[:instruction]} open for instructions"
     server = TCPServer.open(Mayo::PORTS[:instruction])
-    while @listen
+    while @listen do 
       orders = read_while_client(server.accept)
       self.perform(orders) 
     end
@@ -134,7 +121,6 @@ class Mayo::Server
       puts "Unable to interpret results"
     end
     @results = []
-
   end
 
   def perform instruction
@@ -171,21 +157,21 @@ class Mayo::Server
 
   def get_files_from(path);Dir[path];end
 
-  def features_by_scenario files
-    scenarios = files.map do |path|
-      lines = File.open(path, 'r'){|f| f.readlines}
+  def features_by_scenario files #given a set of feature files it will return an expanded set including the line numbers for each scenario.
+    scenarios = files.map do |path|                 #For each features file ie: features/some.feature
+      lines = File.open(path, 'r'){|f| f.readlines} #read the contents of the file
       selected = []
-      before_feature_def = true
-      ignore_file = false
-      last_line = ""
-      lines.each_with_index do |line, index|
-        before_feature_def = false if line.match(/^Feature/)
-        ignore_file = true if before_feature_def && line.include?("@wip")
-    
-        selected << "#{path}:#{index+1}" if line.match(/Scenario/) && !(last_line.include?("@wip") || ignore_file)
-        last_line = line
+      before_feature_def = true                     #Set true to indicate that position is before first encounder of 'Feature'
+      ignore_file = false                           #default is don't ignore the file
+      last_line = ""                                #to remember the previous line
+      lines.each_with_index do |line, index|        #For each line
+        before_feature_def = false if line.match(/^Feature/) #change to false once passed first encouter of 'Feature'
+        ignore_file = true if before_feature_def && line.include?("@wip") #if before 'Feature' and has '@wip' tag then ignore the whole file.
+        selected << "#{path}:#{index+1}" if line.match(/Scenario/) && !(last_line.include?("@wip") || ignore_file) #consider a Scenario start line if line matches /Scenario/ and 
+        #if @wip was not in the last_line or has ignore_file set to true.  If its a Scenario add the path plus lineNo. ie: features/some.feature:6
+        last_line = line #remember previous line to help in above 
       end
-      selected
+      selected #return the selected lines as the output of the map.
     end
     scenarios.flatten
   end
@@ -213,7 +199,7 @@ class Mayo::Server
     @threads.each{|thread| thread.kill}
   end
 
-  def send_files_to_client client_data
+  def send_files_to_client client_data #RSYNC command to send files from server to client
     `rsync -avc -e ssh --delete --ignore-errors --exclude='*.log' #{@project_dir} #{client_data["username"]}@#{client_data["name"]}:#{client_data["working_dir"]}`
   end
 
@@ -264,22 +250,13 @@ class Mayo::Client
   end
 
   def wait_for_orders
-    order = true
-    while !order.nil?
-      print "."
-      begin
-        order = @socket.gets   # Read lines from the socket
-      rescue
-        order = nil
-      end
-      follow_orders order.chomp if order
+    while order = @socket.gets    #wait until there is something to get from socket
+      follow_orders order.chomp   #Send data read from socket to follow_orders
     end
   end
 
   def follow_orders order
-    puts "GOT ORDER #{order}"
     case order
-
     when "stop"
       puts "shutting down"
       @socket.close
@@ -292,17 +269,11 @@ class Mayo::Client
       Dir.chdir(@root)
       FileUtils.rm_rf(@project_dir)
     else
-      begin
-        order = JSON.parse(order)
-      rescue
-        puts "WHAT? Server is talking rubbish - \"#{order}\""
-      end
+      order = JSON.parse(order)
       action = order.keys[0]
       return puts order[action] if action.eql?("display")
       result = run_command(order[action]) if action.include?("run") #either run or run_and_return
-      Mayo.socket_to(@server, Mayo::PORTS[:response]){|socket| 
-        socket.puts("Result from #{@client_data[:name]}\n#{result}") 
-      } if action.eql?("run_and_return")
+      Mayo.socket_to(@server, Mayo::PORTS[:response]){|socket| socket.puts("Result from #{@client_data[:name]};\n\n#{result}\n\n") } if action.eql?("run_and_return")
     end
   end
 
@@ -311,6 +282,4 @@ class Mayo::Client
     puts "command complete"
     result
   end
-
 end
-
