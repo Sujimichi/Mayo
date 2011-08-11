@@ -246,7 +246,7 @@ describe Mayo do
 
         it 'should return a Mayo::Job' do 
           @server.stub!(:get_files_from => @files)
-          job = @server.make_job(["specs"])
+          job = @server.make_job(*["specs"])
           job.should be_a(Mayo::Job)
         end
 

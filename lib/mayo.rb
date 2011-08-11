@@ -18,18 +18,18 @@ class Mayo::Job
   attr_reader :launcher, :ordnance
   attr_accessor :display
 
-  def initialize launcher = "features", ordnance = nil, display = nil
-    @launcher = launcher
-    @launcher = "bundle exec cucumber -p all features/support/ features/step_definitions/" if launcher.eql?("features")
-    @launcher = "bundle exec rspec" if launcher.eql?("specs")
-    @ordnance = ordnance
-    @display = display
+  def initialize launcher = "features", ordnance = nil, display = nil   
+    m = {:features => "bundle exec cucumber -p all features/support/ features/step_definitions/", :specs => "bundle exec rspec"}
+    @launcher = m[launcher.to_sym]  #select the full launch command if launcher matches either features or specs
+    @launcher ||= launcher          #or use whatever is passed if not matched
+    @ordnance = ordnance            #ordnance, the stuff to be fired with the launcher.  The Ordnance will be divied between the clients.
+    @display = display              #An optional string which can be displayed when the Job is processed. 
   end
 
   def in_groups_of n = 1
-    rand_tasks = @ordnance.sort_by{rand}
-    j = 0
-    task_map = Array.new(rand_tasks.size){ j+=1; j=1 if j>n; j} #make array same size as tasks with pattern [1,2,3,..,n,1,2,3,..,n etc]
+    rand_tasks = @ordnance.sort_by{rand}#Randomize the tasks.  Reduce change of same test being run on same client.  Flushes out any inter-test interaction.
+    j = 0 
+    task_map = Array.new(rand_tasks.size){ j+=1; j=1 if j>n; j} #make array same size as tasks with stepped pattern [1,2,3,..,n,1,2,3,..,n etc]
     groups = rand_tasks.group_by{|t| task_map[rand_tasks.index(t)] }.values #group the tasks according to the above pattern     
     groups.map{|g| g.empty? ? nil : "#{@launcher} #{g.join(" ")}" } #map the group, prefixing the launcher command
   end
@@ -44,8 +44,8 @@ class Mayo::Server
   
   def self.start   
     server = Mayo::Server.new
-    server.open_ports #starts 2 threaded processes; one to accept new client connections and the other to accept results
-    server.listen_for_instructions #main loop, wait for an instruction 
+    server.open_ports               #starts 2 threaded processes; one to accept new client connections and the other to accept results
+    server.listen_for_instructions  #main loop, wait for an instruction from user
   end
  
   def initialize
@@ -53,6 +53,7 @@ class Mayo::Server
     @project_dir = Dir.getwd   
     @clients, @threads, @results = Array.new(3){[]}
   end
+
   def open_ports
     @listen = true
     @threads = [ Thread.new { listen_for_clients },Thread.new { listen_for_response } ] #Create threads running TCPServers
@@ -61,16 +62,14 @@ class Mayo::Server
   def listen_for_clients  #maintain a TCP port to accept new client signups
     @client_server = TCPServer.open(Mayo::PORTS[:connect])
     server_data = {:project_dir => @project_dir, :servername => Socket.gethostname} #inf to send to clients on connect
-    puts "Port #{Mayo::PORTS[:connect]} open to accept new clients"
+    puts "Port #{Mayo::PORTS[:connect]} open to accept new clients. Client Command;\tmayo connect #{Socket.gethostname}"
     while @listen do
       Thread.start(@client_server.accept) do |client|                   #wait for a client to connect and start a new thread
         #TODO send the client the servers public key to be added to the clients authorized_keys
         client.puts(server_data.to_json)                                #Send data to client       
         client_data = JSON.parse(client.gets).merge!("socket" => client)#Add the socket to the client data
         @clients << client_data                                         #hold the client in Array
-        t = "Signing up client: #{client_data['name']}"
-        t << " - running version: #{client_data["mayo_version"]}" if client_data["mayo_version"] #&& client_data["mayo_version"] != Mayo::VERSION
-        puts t
+        puts ["Signing up client: #{client_data['name']}", client_data["mayo_version"] ? " - running version: #{client_data["mayo_version"]}" : ""].join
       end
     end
   end
@@ -79,7 +78,7 @@ class Mayo::Server
     @response_server = TCPServer.open(Mayo::PORTS[:response]) 
     while @listen do
       Thread.start(@response_server.accept) do |client|
-        @results << read_while_client(client) #This could be improved! Multiple threads are sharing @results.  Replace with a memcached sort and collect later?
+        @results << read_while_client(client) #This could be improved! Multiple threads are sharing @results.  Replace with a memcached store and collect later?
         puts @results.last
         @jobs_left -= 1     
         show_results if @jobs_left == 0
@@ -91,8 +90,10 @@ class Mayo::Server
     puts "Port #{Mayo::PORTS[:instruction]} open for instructions"
     server = TCPServer.open(Mayo::PORTS[:instruction])
     while @listen do 
-      orders = read_while_client(server.accept)
-      self.perform(orders) 
+      Thread.start(server.accept) do |client|
+        orders = read_while_client(client)
+        self.perform(orders) 
+      end    
     end
   end
 
@@ -105,9 +106,7 @@ class Mayo::Server
 
   def show_results
     puts @results.inspect
-    puts "\n\n----------------------------------------------------------------------------------"
-    puts "   All clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds"     
-    puts "----------------------------------------------------------------------------------\n\n"
+    puts "\n\n#{Array.new(80){'-'}.join}\n\tAll clients have retuned.  Time taken: #{Time.now - @jobs_started_at}seconds\n#{Array.new(80){'-'}.join}"
     cr = CukeResultReader.new(@results)
     begin
       cr.process_results
