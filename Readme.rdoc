@@ -7,7 +7,7 @@ Mayo is a command line gem to help speed the running of cucumber tests by spread
 Its primary function is to spread cucumber features but can also be used to spread rspec tests and other commands.
 
 
-Mayo is still very much a work in progress.  Its pretty basic and not fit for general consumption.  That being said; I'm now running my full (normally 30 minute) test suite in 5 minutes.
+Mayo is still very much a work in progress.  Its pretty basic and not fit for general consumption.  That being said; I'm now running my full (normally 30 minute) test suite in around 6 minutes.
 Comments, suggestions, forks and whatnot all very welcome!
 
 
@@ -35,8 +35,8 @@ You can also re-run the tests which failed in the previous run.
 
 
 ==Install
-Install the mayo gem on the server and client machines.  It's not rubygem worthy yet so just grab it from here and build the gem;
-    git clone git@github.com:Sujimichi/Mayo.git
+Install the mayo gem on the server and client machines.  It's not rubygems worthy yet so just grab it from here and build the gem;
+    git clone git://github.com/Sujimichi/Mayo.git
     cd mayo
     bundle
     rake install
@@ -52,7 +52,7 @@ The client will run `bundle install` to get the gems needed, but other requireme
 
 
 ==The Mayo Solution
-The notion behind it is very simple; Mirror the directory containing the files to be tested to several client machines.  Then run a command on the client and collect the response.  The command diriects the clients to do a portion of the whole task.
+The notion behind it is very simple; Mirror the directory containing the files to be tested to several client machines.  Then run a command on the client and collect the response.  The command directs the clients to do a portion of the whole task.
 
 For example, the command;
     bundle exec cucumber features/**/*.feature
@@ -69,7 +69,7 @@ When running cucumber features (Mayo's primary design aim) a single feature file
 With either just files or specific scenarios the order is randomized before being assigned to clients.  a) This prevents the same test always being run on the same client b) its just good to add some noise!
 
 
-Before a client is sent a command to process it is first sent an updated copy of the directory over rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  The server comunicates the commands and responces between the clients using Ruby TCPSockets.  
+Before a client is sent a command to process it is first sent an updated copy of the directory over rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  The server communicates the commands and responses between the clients using Ruby TCPSockets.  
 
 In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output.  With other commands (ie rspec) each clients output is simple output to the terminal which the server is in as they become ready.  
 
@@ -83,7 +83,7 @@ You can just simply run several clients in different terms on one machine but th
 
 While it is possible to run several instances of cucumber on the same machine, there is (not surprisingly) a positive correlation between number of instances and number of "false-failing" tests!  Works ok for rspec and probably will be ok for some other commands, but not recommended for cucumber.  Its best to use other physical or virtual machines.  
 
-The goal of getting cucumber tests to run faster is not about computational power, its about the speed at which dumb browsers can take input.  Simply spliting features between two instances of cucumber (each on a separate virutal machine running on the same physical machine) will almost certainly halve the run time.  With 5 clients I've been able to bring a 30 minute test suite down to 6 minutes.  
+The goal of getting cucumber tests to run faster is not about computational power, its about the speed at which dumb browsers can take input.  Simply splitting features between two instances of cucumber (each on a separate virtual machine running on the same physical machine) will almost certainly halve the run time.  With 5 clients I've been able to bring a 30 minute test suite down to 6 minutes.  
 
 
 I am finding that, perhaps due to being randomly split or being run on different machines, some weaker tests are more likely to fail as a result of be spread with Mayo.  
