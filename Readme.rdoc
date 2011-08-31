@@ -3,10 +3,8 @@
 A command line gem to speed the running of cucumber tests by spreading the work over several machines.  
 Its primary function is to spread cucumber features but can also be used to spread rspec tests and other commands.
 
-Mayo takes no part in the app being tested.  It has no configs and no changes to the app are needed.  
+Mayo does not need any configs or changes to the test code, it is just a catalyst.  It does not really care what types of tests are being run (but it has extra functionality when used with cucumber features), all mayo does is rsync a dir to n client machines and then requests the clients perform some command line action in that dir.
 
-It does not really care what the app being tested is, all mayo does is rsync a dir to client machines and then requests the clients perform some action in that dir.
-The intended usage is for that action to be a subset of cucumber tests but it could be anything.  
 
 Mayo is still very much a work in progress.  Its pretty basic and not fit for general consumption.  That being said; I'm now running my full (normally 30 minute) test suite in around 6 minutes.
 Comments, suggestions, forks and whatnot all very welcome!
