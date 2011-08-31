@@ -30,7 +30,7 @@ To run your features run;
     mayo run features
 
 The clients will run a share of the tests and return their results to the server.
-As you change your code and want to run the test again, just call mayo run again.
+As you change your code and want to run the test again, just call 'mayo run features' again.
 
 You can also pass some args to run;
     mayo run specs
