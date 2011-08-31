@@ -77,7 +77,7 @@ With either just files or specific scenarios the order is randomized before bein
 
 Before a client is sent a command to process it is first sent an updated copy of the directory over rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  The server communicates the commands and responses between the clients using Ruby TCPSockets.  
 
-In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output.  With other commands (ie rspec) each clients output is simple output to the terminal which the server is in as they become ready.  
+In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output.  With other commands (ie rspec) each clients' output is simply output to the terminal which the server is in.
 
 Mayo does not need any change to be made to the project being tested.  I felt that its important for this just to be a work spreader and to have no impact on the project.  
 
