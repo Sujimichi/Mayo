@@ -10,8 +10,6 @@ Mayo is still very much a work in progress.  Its pretty basic and not fit for ge
 Comments, suggestions, forks and whatnot all very welcome!
 
 
-
-Mayo: A delicious spread that's great with cucumbers / A way to spread your delicious cucumber features.
 NB: not Mayonnaise, it's Mayo, cos it's Bri'ish innit!
 
 
