@@ -1,14 +1,16 @@
 = Mayo
-A delicious spread that's great with cucumbers / A way to spread your delicious cucumber features over several machines.
 
-NB: not Mayonnaise, it's Mayo, cos it's Bri'ish innit!
-
-Mayo is a command line gem to help speed the running of cucumber tests by spreading the work over several machines.
+A command line gem to speed the running of cucumber tests by spreading the work over several machines.
 Its primary function is to spread cucumber features but can also be used to spread rspec tests and other commands.
+
+Mayo does not need any configs or changes to the test code, it is just a catalyst.  It does not really care what types of tests are being run (but it has extra functionality when used with cucumber features), all mayo does is rsync a dir to n client machines and then requests the clients perform some command line action in that dir.
 
 
 Mayo is still very much a work in progress.  Its pretty basic and not fit for general consumption.  That being said; I'm now running my full (normally 30 minute) test suite in around 6 minutes.
 Comments, suggestions, forks and whatnot all very welcome!
+
+
+NB: not Mayonnaise, it's Mayo, cos it's Bri'ish innit!
 
 
 ==Basic Usage
@@ -24,7 +26,7 @@ To run your features run;
     mayo run features
 
 The clients will run a share of the tests and return their results to the server.
-As you change your code and want to run the test again, just call mayo run again.
+As you change your code and want to run the test again, just call 'mayo run features' again.
 
 You can also pass some args to run;
     mayo run specs
@@ -71,7 +73,7 @@ With either just files or specific scenarios the order is randomized before bein
 
 Before a client is sent a command to process it is first sent an updated copy of the directory over rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  The server communicates the commands and responses between the clients using Ruby TCPSockets.
 
-In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output.  With other commands (ie rspec) each clients output is simple output to the terminal which the server is in as they become ready.
+In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output.  With other commands (ie rspec) each clients' output is simply output to the terminal which the server is in.
 
 Mayo does not need any change to be made to the project being tested.  I felt that its important for this just to be a work spreader and to have no impact on the project.
 
