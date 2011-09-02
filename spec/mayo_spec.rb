@@ -102,10 +102,9 @@ describe Mayo do
 
         it 'should listen for multiple client connects' do 
           socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
-          socket.puts({:username => "foobar", :name => "yourface", :working_dir => "/here"}.to_json)
+          socket.puts({:username => "foobar", :name => "yourface"}.to_json)
           socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
-          socket.puts({:username => "fibble", :name => "yourface", :working_dir => "/here"}.to_json)
-
+          socket.puts({:username => "fibble", :name => "yourface"}.to_json)
           take_server_down       
           @server.clients.should_not be_empty
           @server.clients[0]["username"].should == "foobar"
@@ -116,11 +115,11 @@ describe Mayo do
           threads = []
           threads << Thread.new{
             socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
-            socket.puts({:username => "foobar", :name => "yourface", :working_dir => "/here"}.to_json)
+            socket.puts({:username => "foobar", :name => "yourface"}.to_json)
           }
           threads << Thread.new {
             socket = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
-            socket.puts({:username => "fibble", :name => "yourface", :working_dir => "/here"}.to_json)
+            socket.puts({:username => "fibble", :name => "yourface"}.to_json)
           }
           threads.each{|t| t.join}
           take_server_down              
@@ -135,6 +134,61 @@ describe Mayo do
           r.chop.should == {:project_dir => "/some_dir", :servername => Socket.gethostname}.to_json
         end
 
+      end
+
+      describe "current_clients" do 
+        before(:each) do 
+          @server.instance_variable_set("@listen", true)
+          @server.instance_variable_set("@project_dir", "/some_dir")
+          @threads = []
+          @threads << Thread.new {  @server.listen_for_clients  }
+          @socket1 = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+          @socket1.puts({:username => "foobar", :name => "machine_1"}.to_json)       
+          @socket2 = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+          @socket2.puts({:username => "fibble", :name => "machine_2"}.to_json)
+          sleep 0.5 #to give the client register time to complete before assertion
+        end
+        after(:each) do 
+          take_server_down
+        end
+
+        it 'should return the clients that are currently connected' do 
+          @server.current_clients.size.should == 2
+        end
+
+        it 'should have machine_1 and machine_2 as current client names' do 
+          @server.current_clients.map{|client| client["name"]}.sort.should == %w[machine_1 machine_2]
+        end
+
+        it 'should only return one client if the other has disconected' do 
+          @socket1.close
+          @server.current_clients.size.should == 1
+        end
+      end
+
+      describe "active_clients" do 
+        before(:each) do 
+          @server.instance_variable_set("@listen", true)
+          @server.instance_variable_set("@project_dir", "/some_dir")
+          @threads = []
+          @threads << Thread.new {  @server.listen_for_clients  }
+          @socket1 = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+          @socket1.puts({:username => "foobar", :name => "machine_1"}.to_json)
+          @socket2 = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
+          @socket2.puts({:username => "fibble", :name => "machine_2"}.to_json)
+          sleep 0.5 #to give the client register time to complete before assertion
+        end
+        after(:each) do 
+          take_server_down
+        end
+
+        it 'should perform some action of the current_clients' do 
+          d = []
+          @server.active_clients do |client|
+            d.push client["name"]
+          end
+          d.should == %w[machine_1 machine_2]
+        end
       end
 
       describe "listen_for_response" do 

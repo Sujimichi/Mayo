@@ -3,7 +3,7 @@ A delicious spread that's great with cucumbers / A way to spread your delicious 
 
 NB: not Mayonnaise, it's Mayo, cos it's Bri'ish innit!
 
-Mayo is a command line gem to help speed the running of cucumber tests by spreading the work over several machines.  
+Mayo is a command line gem to help speed the running of cucumber tests by spreading the work over several machines.
 Its primary function is to spread cucumber features but can also be used to spread rspec tests and other commands.
 
 
@@ -30,8 +30,8 @@ You can also pass some args to run;
     mayo run specs
     mayo run features features/just_these/*.feature
 
-You can also re-run the tests which failed in the previous run.  
-    mayo run last_failed 
+You can also re-run the tests which failed in the previous run.
+    mayo run last_failed
 
 
 ==Install
@@ -57,9 +57,9 @@ The notion behind it is very simple; Mirror the directory containing the files t
 For example, the command;
     bundle exec cucumber features/**/*.feature
 
-This would run cucumber with whatever files where matched by features/**/*.feature.  Mayo will take that command and pass the first part "bundle exec cucumber" to each client but with only a subset of the files matched.  
+This would run cucumber with whatever files where matched by features/**/*.feature.  Mayo will take that command and pass the first part "bundle exec cucumber" to each client but with only a subset of the files matched.
 
-In more general terms, if the command was "some_launcher thing1.file thing2.file" and there where two clients, then each client would work on one file.  In this example a third client would be redundant, however Mayo is indented to run large test suites with many files.  
+In more general terms, if the command was "some_launcher thing1.file thing2.file" and there where two clients, then each client would work on one file.  In this example a third client would be redundant, however Mayo is indented to run large test suites with many files.
 
 When running cucumber features (Mayo's primary design aim) a single feature file can be processed by several clients with each client running different scenarios. When given the command `cucumber some.feature` Mayo will find the lines which define scenarios and send the clients more granular commands ie:
     cucumber some.feature:5 some.feature:16 feature:28            #<-command sent to 1st client
@@ -69,11 +69,16 @@ When running cucumber features (Mayo's primary design aim) a single feature file
 With either just files or specific scenarios the order is randomized before being assigned to clients.  a) This prevents the same test always being run on the same client b) its just good to add some noise!
 
 
-Before a client is sent a command to process it is first sent an updated copy of the directory over rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  The server communicates the commands and responses between the clients using Ruby TCPSockets.  
+Before a client is sent a command to process it is first sent an updated copy of the directory over rsync.  This is why the clients need the servers' id_rsa.pub in their authorized_keys.  As each client completes its portion its results are collected and displayed by the server.  The server communicates the commands and responses between the clients using Ruby TCPSockets.
 
-In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output.  With other commands (ie rspec) each clients output is simple output to the terminal which the server is in as they become ready.  
+In the case of cucumber results the server will put the separate results back together to give a similar output to standard cucumber output.  With other commands (ie rspec) each clients output is simple output to the terminal which the server is in as they become ready.
 
-Mayo does not need any change to be made to the project being tested.  I felt that its important for this just to be a work spreader and to have no impact on the project.  
+Mayo does not need any change to be made to the project being tested.  I felt that its important for this just to be a work spreader and to have no impact on the project.
+
+
+==Ingredients
+
+Mayo is made up of some Ruby TCPSockets, a couple Threads, a sprinkling of backticks and two egg whites.
 
 
 ==Notes
@@ -81,12 +86,12 @@ You can just simply run several clients in different terms on one machine but th
     sujimichi@yokai:~/testing/client_1$ mayo connect
     sujimichi@yokai:~/testing/client_2$ mayo connect
 
-While it is possible to run several instances of cucumber on the same machine, there is (not surprisingly) a positive correlation between number of instances and number of "false-failing" tests!  Works ok for rspec and probably will be ok for some other commands, but not recommended for cucumber.  Its best to use other physical or virtual machines.  
+While it is possible to run several instances of cucumber on the same machine, there is (not surprisingly) a positive correlation between number of instances and number of "false-failing" tests!  Works ok for rspec and probably will be ok for some other commands, but not recommended for cucumber.  Its best to use other physical or virtual machines.
 
-The goal of getting cucumber tests to run faster is not about computational power, its about the speed at which dumb browsers can take input.  Simply splitting features between two instances of cucumber (each on a separate virtual machine running on the same physical machine) will almost certainly halve the run time.  With 5 clients I've been able to bring a 30 minute test suite down to 6 minutes.  
+The goal of getting cucumber tests to run faster is not about computational power, its about the speed at which dumb browsers can take input.  Simply splitting features between two instances of cucumber (each on a separate virtual machine running on the same physical machine) will almost certainly halve the run time.  With 5 clients I've been able to bring a 30 minute test suite down to 6 minutes.
 
 
-I am finding that, perhaps due to being randomly split or being run on different machines, some weaker tests are more likely to fail as a result of be spread with Mayo.  
+I am finding that, perhaps due to being randomly split or being run on different machines, some weaker tests are more likely to fail as a result of be spread with Mayo.
 
 
 ==Running Custom Commands (more experimental)
@@ -107,7 +112,6 @@ I have a cucumber test suite for a rails app which takes over 30 minutes to run.
 
 There are several solutions which enable distribution of tests (most notably Testjour) but for one reason and another I was unsuccessful with Testjour.  Some of the other solutions require some config of the project being tested and I'd prefer a 'test catalyst' that did not require any change to either config or tests.
 http://www.ruby-forum.com/topic/166445
-    
+
 ===License
 Mayo is released under the MIT license.
-

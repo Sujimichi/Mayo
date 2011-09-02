@@ -176,13 +176,12 @@ class Mayo::Server
   end
 
   def update_active_clients clients = current_clients
-    print "\nUpdating Active Clients' Data"
+    print "\nUpdating active clients with working directory"
     active_clients(clients) do |client|
       client["socket"].puts({:display => "receiving files"}.to_json)
       send_files_to_client client
       client["socket"].puts("goto_project_dir")
       client["socket"].puts({:run => "bundle install"}.to_json)
-      #client["socket"].puts({:run => "bundle exec rake db:migrate && bundle exec rake db:test:prepare"}.to_json)
       print(".")
     end
     puts "\tUpdated #{clients.size} clients"
@@ -235,7 +234,7 @@ class Mayo::Client
 
   def initialize 
     @server_port = Mayo::PORTS[:connect]
-    @client_data = {:username => Dir.getwd.split("/")[2], :name => Socket.gethostname, :working_dir => Dir.getwd, :mayo_version => Mayo::VERSION}
+    @client_data = {:username => Dir.getwd.split("/")[2], :name => Socket.gethostname, :mayo_version => Mayo::VERSION}
   end
 
   def register_with_server server_name
