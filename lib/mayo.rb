@@ -90,10 +90,11 @@ class Mayo::Server
     puts "Port #{Mayo::PORTS[:instruction]} open for instructions"
     server = TCPServer.open(Mayo::PORTS[:instruction])
     while @listen do 
-      Thread.start(server.accept) do |client|
+      #Thread.start(server.accept) do |client|
+        client = server.accept
         orders = read_while_client(client)
         self.perform(orders) 
-      end    
+      #end    
     end
   end
 
@@ -130,8 +131,8 @@ class Mayo::Server
     return puts job if job.is_a?(String)  #when job is a string error message
     clients = current_clients             #get the current clients
     return puts("\e[31mNo Clients Connected\e[0m - Run 'mayo connect #{Socket.gethostname}' on client machines to connect clients") if clients.empty?
-    update_active_clients(clients)        #send updated files to clients
-    process_job(job, clients)             #distribute the job amongst the clients
+    update_active_clients        #send updated files to clients
+    process_job(job)             #distribute the job amongst the clients
   end
 
   def make_job *args
@@ -146,7 +147,7 @@ class Mayo::Server
     Mayo::Job.new(type, files)
   end
 
-  def process_job job, clients
+  def process_job job, clients = current_clients
     @jobs_started_at = Time.now
     puts job.display  #Display job messgage if any
     jobs_for_clients = job.in_groups_of(clients.size).zip(clients) #assign the different clients thier part of the whole job

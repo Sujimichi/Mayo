@@ -143,7 +143,7 @@ describe Mayo do
           @threads = []
           @threads << Thread.new {  @server.listen_for_clients  }
           @socket1 = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
-          @socket1.puts({:username => "foobar", :name => "machine_1"}.to_json)       
+          @socket1.puts({:username => "foobar", :name => "machine_1"}.to_json)
           @socket2 = TCPSocket.open(Socket.gethostname, Mayo::PORTS[:connect])
           @socket2.puts({:username => "fibble", :name => "machine_2"}.to_json)
           sleep 0.5 #to give the client register time to complete before assertion
@@ -164,6 +164,7 @@ describe Mayo do
           @socket1.close
           @server.current_clients.size.should == 1
         end
+
       end
 
       describe "active_clients" do 
@@ -264,7 +265,7 @@ describe Mayo do
         end
 
         it 'should call process_job with the job returned by make_job' do 
-          @server.should_receive(:process_job).with(@job, ["foo", "bar"])
+          @server.should_receive(:process_job).with(@job)
           @server.perform(["run", "features"])
         end
 
