@@ -235,7 +235,7 @@ class Mayo::Client
 
   def initialize 
     @server_port = Mayo::PORTS[:connect]
-    @client_data = {:username => Dir.getwd.split("/")[2], :name => Socket.gethostname, :mayo_version => Mayo::VERSION}
+    @client_data = {:username => Dir.getwd.split("/")[2], :name => Socket.gethostname, :working_dir => Dir.getwd, :mayo_version => Mayo::VERSION}
   end
 
   def register_with_server server_name
