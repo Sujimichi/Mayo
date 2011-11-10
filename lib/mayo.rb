@@ -183,7 +183,7 @@ class Mayo::Server
       send_files_to_client client
       client["socket"].puts("goto_project_dir")
       client["socket"].puts({:run => "bundle install"}.to_json)
-      client["socket"].puts({:run => "bundle exec spork cucumber"}) #attempt to start spork on client
+      client["socket"].puts({:run => "bundle exec spork cucumber"}.to_json) #attempt to start spork on client
       print(".")
     end
     puts "\tUpdated #{clients.size} clients"
