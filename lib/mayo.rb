@@ -183,6 +183,7 @@ class Mayo::Server
       send_files_to_client client
       client["socket"].puts("goto_project_dir")
       client["socket"].puts({:run => "bundle install"}.to_json)
+      client["socket"].puts({:run => "bundle exec spork cucumber"}) #attempt to start spork on client
       print(".")
     end
     puts "\tUpdated #{clients.size} clients"
@@ -277,8 +278,13 @@ class Mayo::Client
   end
 
   def run_command command
-    result = `#{command}`
-    puts "command complete"
+    begin
+      result = `#{command}`
+      puts "command complete"
+    rescue
+      result = "command failed"
+      puts "command failed"
+    end
     result
   end
 end
