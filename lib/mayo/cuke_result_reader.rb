@@ -51,7 +51,7 @@ class CukeResultReader
   def failing_scenario_command
     return nil if @failing_scenarios.empty?
     command = ["bundle exec cucumber -p all features/support features/step_definitions"]
-    command << @failing_scenarios.map{|s| s.sub("cucumber -p all", "").split("#").first.gsub("\e[31m","").gsub("\e[90m","").gsub("\e[0m","").gsub(" ","")}.join(" ")
+    command << @failing_scenarios.map{|s| s.sub("cucumber -p all", "").split("#").first.gsub("\e[31m","").gsub("\e[90m","").gsub("\e[0m","").gsub(" ","")}.join(" ").gsub("cucumberfeatures", "features")
   end
 
   def summary
