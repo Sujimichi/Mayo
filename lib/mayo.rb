@@ -183,7 +183,7 @@ class Mayo::Server
       send_files_to_client client
       client["socket"].puts("goto_project_dir")
       client["socket"].puts({:run => "bundle install"}.to_json)
-      #client["socket"].puts({:run => "gnome-terminal -e 'memcached'"}.to_json) #attempt to start memcached server on client
+      client["socket"].puts({:run => "gnome-terminal -e 'memcached'"}.to_json) #attempt to start memcached server on client
       #client["socket"].puts({:run => "gnome-terminal -e 'bundle exec spork cucumber'"}.to_json) #attempt to start spork server on client
       print(".")
     end
