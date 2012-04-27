@@ -279,7 +279,7 @@ class Mayo::Client
   end
 
   def run_command command
-    puts "Running: #{result}"
+    puts "Running: #{command}"
     begin
       result = `#{command}`
       puts "command complete"
